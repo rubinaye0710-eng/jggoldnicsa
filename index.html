@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGGOLDNICSA | Sistema de facturación</title><link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
+<body>
+<section id="login" class="login-wrap"><form id="loginForm" class="login-card">
+<img src="imagenes/logo.JPG" alt="JGGOLDNICSA" class="logo"><h1>JGGOLDNICSA</h1><p>Sistema de facturación</p>
+<label>Correo electrónico<input id="email" type="email" required autocomplete="username"></label>
+<label>Contraseña<input id="password" type="password" required autocomplete="current-password"></label>
+<button>Iniciar sesión</button><small id="loginError" class="error"></small>
+</form></section>
+<div id="app" class="shell hidden">
+<aside class="sidebar"><div class="brand"><img src="imagenes/logo.JPG"><b>JGGOLDNICSA</b></div>
+<button class="nav active" data-page="invoices">▤ &nbsp; Facturas</button><button class="nav" data-page="new">＋ &nbsp; Crear factura</button>
+<div class="side-bottom"><span id="userEmail"></span><button id="logout" class="secondary">Cerrar sesión</button></div></aside>
+<main class="main"><header><button id="menu" class="menu">☰</button><h2 id="pageTitle">Facturas</h2><span class="spacer"></span><span class="online">● En línea</span></header>
+<section id="invoicePage" class="panel"><div class="toolbar"><div><h3>Lista de facturas</h3><p>Consulta, imprime o elimina comprobantes.</p></div><button id="goNew">＋ Nueva factura</button></div>
+<div class="filters"><input id="filter" placeholder="Buscar por número, cliente o proveedor…"><button id="refresh" class="secondary">Actualizar</button></div>
+<div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Acciones</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></section>
+<section id="newPage" class="hidden">
+<form id="invoiceForm">
+<div class="panel"><h3>Datos del cliente</h3><div class="grid">
+<label>Nombre del cliente<input name="clienteNombre" required></label><label>Teléfono<input name="telefono" required></label>
+<label>Cédula<input name="cedula" required></label><label>Foto de cédula<input name="fotoCedula" type="file" accept="image/*" required></label>
+<label class="wide">Dirección<input name="clienteDireccion" required></label></div>
+<div class="search-row"><input id="clientSearch" placeholder="Buscar cliente por cédula"><button type="button" id="searchClient" class="secondary">Buscar cliente</button></div><div id="clientResults"></div></div>
+<div class="panel"><h3>Datos de facturación</h3><div class="grid">
+<label>Proveedor<select name="proveedor" id="provider" required><option value="1">Julio Rios</option><option value="2">Alfredo Sanchez</option><option value="3">Dwayne Darren</option></select></label>
+<label>Número de factura<input id="invoiceNumber" readonly></label><label>RUC<input name="ruc" value="J0310000461937" required></label><label>UAF<input name="uag" value="UAF-RSO-C-XII-975-2025" required></label></div></div>
+<div class="panel"><div class="toolbar"><h3>Detalles de factura</h3><button type="button" id="addItem" class="secondary">＋ Agregar ítem</button></div>
+<div class="table-wrap"><table class="items"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Fecha entrega</th><th>Cierre</th><th>Gramos</th><th>Precio/gramo</th><th>Kilataje</th><th>Onzas</th><th>Punto</th><th>Subtotal</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>
+<div class="total">Total general: <strong id="grandTotal">C$ 0.00</strong></div></div>
+<div class="form-actions"><button type="button" id="cancel">Cancelar</button><button id="saveInvoice">Guardar factura</button></div><p id="formMessage" role="status"></p>
+</form></section>
+</main></div>
+<div id="printArea" class="hidden"></div>
+<script src="config.js"></script><script src="app.js"></script></body></html>
