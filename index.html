@@ -1,37 +1,132 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGGOLDNICSA | Sistema de facturación</title><link rel="stylesheet" href="styles.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14283b">
+  <title>RIVER GOLD | Gestión empresarial</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
 <body>
-<section id="login" class="login-wrap"><form id="loginForm" class="login-card">
-<img src="imagenes/logo.JPG" alt="JGGOLDNICSA" class="logo"><h1>JGGOLDNICSA</h1><p>Sistema de facturación</p>
-<label>Correo electrónico<input id="email" type="email" required autocomplete="username"></label>
-<label>Contraseña<input id="password" type="password" required autocomplete="current-password"></label>
-<button>Iniciar sesión</button><small id="loginError" class="error"></small>
-</form></section>
-<div id="app" class="shell hidden">
-<aside class="sidebar"><div class="brand"><img src="imagenes/logo.JPG"><b>JGGOLDNICSA</b></div>
-<button class="nav active" data-page="invoices">▤ &nbsp; Facturas</button><button class="nav" data-page="new">＋ &nbsp; Crear factura</button>
-<div class="side-bottom"><span id="userEmail"></span><button id="logout" class="secondary">Cerrar sesión</button></div></aside>
-<main class="main"><header><button id="menu" class="menu">☰</button><h2 id="pageTitle">Facturas</h2><span class="spacer"></span><span class="online">● En línea</span></header>
-<section id="invoicePage" class="panel"><div class="toolbar"><div><h3>Lista de facturas</h3><p>Consulta, imprime o elimina comprobantes.</p></div><button id="goNew">＋ Nueva factura</button></div>
-<div class="filters"><input id="filter" placeholder="Buscar por número, cliente o proveedor…"><button id="refresh" class="secondary">Actualizar</button></div>
-<div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Acciones</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></section>
-<section id="newPage" class="hidden">
-<form id="invoiceForm">
-<div class="panel"><h3>Datos del cliente</h3><div class="grid">
-<label>Nombre del cliente<input name="clienteNombre" required></label><label>Teléfono<input name="telefono" required></label>
-<label>Cédula<input name="cedula" required></label><label>Foto de cédula<input name="fotoCedula" type="file" accept="image/*" required></label>
-<label class="wide">Dirección<input name="clienteDireccion" required></label></div>
-<div class="search-row"><input id="clientSearch" placeholder="Buscar cliente por cédula"><button type="button" id="searchClient" class="secondary">Buscar cliente</button></div><div id="clientResults"></div></div>
-<div class="panel"><h3>Datos de facturación</h3><div class="grid">
-<label>Proveedor<select name="proveedor" id="provider" required><option value="1">Julio Rios</option><option value="2">Alfredo Sanchez</option><option value="3">Dwayne Darren</option></select></label>
-<label>Número de factura<input id="invoiceNumber" readonly></label><label>RUC<input name="ruc" value="J0310000461937" required></label><label>UAF<input name="uag" value="UAF-RSO-C-XII-975-2025" required></label></div></div>
-<div class="panel"><div class="toolbar"><h3>Detalles de factura</h3><button type="button" id="addItem" class="secondary">＋ Agregar ítem</button></div>
-<div class="table-wrap"><table class="items"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Fecha entrega</th><th>Cierre</th><th>Gramos</th><th>Precio/gramo</th><th>Kilataje</th><th>Onzas</th><th>Punto</th><th>Subtotal</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>
-<div class="total">Total general: <strong id="grandTotal">C$ 0.00</strong></div></div>
-<div class="form-actions"><button type="button" id="cancel">Cancelar</button><button id="saveInvoice">Guardar factura</button></div><p id="formMessage" role="status"></p>
-</form></section>
-</main></div>
-<div id="printArea" class="hidden"></div>
-<script src="config.js"></script><script src="app.js"></script></body></html>
+  <section id="login" class="login-wrap">
+    <form id="loginForm" class="login-card">
+      <img src="imagenes/logo.JPG" alt="RIVER GOLD JULIO RÍOS" class="login-logo">
+      <span class="eyebrow">SISTEMA DE GESTIÓN EMPRESARIAL</span>
+      <h1>RIVER GOLD</h1>
+      <p class="login-brand-subtitle">JULIO RÍOS</p>
+      <p>Acceso privado para personal autorizado</p>
+      <label>Correo electrónico<input id="email" type="email" required autocomplete="username" placeholder="correo@empresa.com"></label>
+      <label>Contraseña<input id="password" type="password" required autocomplete="current-password" placeholder="Tu contraseña"></label>
+      <button class="btn btn-primary login-submit" type="submit">Iniciar sesión</button>
+      <small id="loginError" class="error" role="alert"></small>
+      <div class="login-foot">© 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A.</div>
+    </form>
+  </section>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img src="imagenes/logo.JPG" alt="RIVER GOLD JULIO RÍOS">
+        <div><strong>RIVER GOLD</strong><small>JULIO RÍOS</small></div>
+      </div>
+      <div class="side-label">MENÚ PRINCIPAL</div>
+      <nav class="nav-list">
+        <button class="nav active" data-page="dashboard"><span class="nav-icon">▦</span>Resumen</button>
+        <button class="nav" data-page="invoices"><span class="nav-icon">▤</span>Facturas</button>
+        <button class="nav" data-page="new"><span class="nav-icon">＋</span>Nueva factura</button>
+        <button class="nav" data-page="clients"><span class="nav-icon">♙</span>Clientes</button>
+        <button class="nav" data-page="reports"><span class="nav-icon">▥</span>Reportes</button>
+      </nav>
+      <div class="side-label admin-label">ADMINISTRACIÓN</div>
+      <nav class="nav-list admin-nav">
+        <button class="nav admin-only" data-page="users"><span class="nav-icon">♧</span>Usuarios y accesos</button>
+        <button class="nav admin-only" data-page="backup"><span class="nav-icon">⤓</span>Respaldos</button>
+      </nav>
+      <div class="side-bottom">
+        <div class="user-chip"><div class="avatar" id="userAvatar">JG</div><div class="user-meta"><strong id="userName">Usuario</strong><small id="userRole">Personal</small></div></div>
+        <button id="logout" class="btn btn-logout">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button id="menu" class="menu-btn" aria-label="Abrir menú">☰</button>
+        <div><span class="eyebrow top-eyebrow">INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A.</span><h2 id="pageTitle">Resumen general</h2></div>
+        <div class="top-right"><span class="online-dot"></span><span>Conectado</span><span class="top-divider"></span><span id="todayLabel"></span></div>
+      </header>
+
+      <div id="profileNotice" class="notice hidden"></div>
+
+      <section id="dashboardPage" class="page-section">
+        <div class="welcome-row"><div><span class="eyebrow">PANEL DE CONTROL</span><h1>Resumen de operaciones</h1><p>Indicadores generales de facturación y actividad.</p></div><button class="btn btn-primary" id="dashboardNew">＋ Crear factura</button></div>
+        <div class="metric-grid">
+          <article class="metric-card"><div class="metric-top"><span>Facturas registradas</span><span class="metric-icon">▤</span></div><strong id="kpiInvoices">—</strong><small>Total histórico</small></article>
+          <article class="metric-card"><div class="metric-top"><span>Ventas acumuladas</span><span class="metric-icon gold-icon">C$</span></div><strong id="kpiSales">—</strong><small>Según detalles guardados</small></article>
+          <article class="metric-card"><div class="metric-top"><span>Clientes registrados</span><span class="metric-icon">♙</span></div><strong id="kpiClients">—</strong><small>Proveedores / vendedores</small></article>
+          <article class="metric-card"><div class="metric-top"><span>Facturas del mes</span><span class="metric-icon">▣</span></div><strong id="kpiMonth">—</strong><small id="kpiMonthLabel">Mes actual</small></article>
+        </div>
+        <div class="dashboard-grid">
+          <article class="content-card"><div class="card-heading"><div><h3>Actividad de los últimos 6 meses</h3><p>Importe de facturas por mes</p></div><span class="tag">Ventas</span></div><div id="salesChart" class="bar-chart"><p class="muted">Cargando indicadores…</p></div></article>
+          <article class="content-card"><div class="card-heading"><div><h3>Accesos rápidos</h3><p>Operaciones frecuentes</p></div></div><div class="quick-actions"><button data-page="new"><span>＋</span><b>Nueva factura</b><small>Registrar una compra</small></button><button data-page="invoices"><span>▤</span><b>Consultar facturas</b><small>Buscar comprobantes</small></button><button data-page="clients"><span>♙</span><b>Directorio de clientes</b><small>Consultar registros</small></button><button data-page="reports"><span>▥</span><b>Ver reportes</b><small>Revisar resultados</small></button></div></article>
+        </div>
+        <article class="content-card"><div class="card-heading"><div><h3>Facturas recientes</h3><p>Últimos comprobantes registrados</p></div><button class="btn btn-outline btn-small" data-page="invoices">Ver todas</button></div><div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Fecha</th><th>Cliente</th><th>Proveedor</th><th>Importe</th></tr></thead><tbody id="recentRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></article>
+      </section>
+
+      <section id="invoicePage" class="page-section hidden">
+        <div class="section-intro"><div><span class="eyebrow">OPERACIONES</span><h1>Facturas</h1><p>Consulta, filtra e imprime comprobantes.</p></div><button class="btn btn-primary" id="goNew">＋ Nueva factura</button></div>
+        <article class="content-card"><div class="filters"><input id="filter" placeholder="Buscar por número, cliente o proveedor…"><button id="refresh" class="btn btn-outline">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Acciones</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></article>
+      </section>
+
+      <section id="newPage" class="page-section hidden">
+        <div class="section-intro"><div><span class="eyebrow">OPERACIONES</span><h1>Nueva factura</h1><p>Complete la información del vendedor y del material recibido.</p></div></div>
+        <form id="invoiceForm">
+          <article class="content-card"><div class="card-heading"><div><h3>Datos del cliente</h3><p>Información de la persona que entrega el material.</p></div><span class="step-number">01</span></div><div class="form-grid">
+            <label>Nombre del cliente<input name="clienteNombre" required></label><label>Teléfono<input name="telefono" required></label>
+            <label>Cédula<input name="cedula" required></label><label>Foto de cédula<input name="fotoCedula" type="file" accept="image/*" required></label>
+            <label class="span-2">Dirección<input name="clienteDireccion" required></label>
+          </div><div class="search-row"><input id="clientSearch" placeholder="Buscar cliente por cédula"><button type="button" id="searchClient" class="btn btn-outline">Buscar cliente</button></div><div id="clientResults"></div></article>
+          <article class="content-card"><div class="card-heading"><div><h3>Datos de facturación</h3><p>Proveedor y numeración del comprobante.</p></div><span class="step-number">02</span></div><div class="form-grid">
+            <label>Proveedor<select name="proveedor" id="provider" required><option value="1">Julio Rios</option><option value="2">Alfredo Sanchez</option><option value="3">Dwayne Darren</option></select></label>
+            <label>Número de factura<input id="invoiceNumber" readonly></label><label>RUC<input name="ruc" value="J0310000461937" required></label><label>UAF<input name="uag" value="UAF-RSO-C-XII-975-2025" required></label>
+          </div></article>
+          <article class="content-card"><div class="card-heading"><div><h3>Detalles de factura</h3><p>Agregue uno o más renglones de material.</p></div><button type="button" id="addItem" class="btn btn-outline">＋ Agregar ítem</button></div><div class="table-wrap"><table class="items"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Fecha entrega</th><th>Cierre</th><th>Gramos</th><th>Precio/gramo</th><th>Kilataje</th><th>Onzas</th><th>Punto</th><th>Subtotal</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div><div class="total-box"><span>Total general</span><strong id="grandTotal">C$ 0.00</strong></div></article>
+          <div class="form-actions"><button type="button" id="cancel" class="btn btn-outline">Cancelar</button><button id="saveInvoice" class="btn btn-primary">Guardar factura</button></div><p id="formMessage" role="status"></p>
+        </form>
+      </section>
+
+      <section id="clientsPage" class="page-section hidden">
+        <div class="section-intro"><div><span class="eyebrow">DIRECTORIO</span><h1>Clientes</h1><p>Personas registradas en las operaciones de compra.</p></div></div>
+        <article class="content-card"><div class="filters"><input id="clientFilter" placeholder="Buscar por nombre, cédula o teléfono…"><button id="reloadClients" class="btn btn-outline">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Dirección</th><th>Registro</th></tr></thead><tbody id="clientRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></article>
+      </section>
+
+      <section id="reportsPage" class="page-section hidden">
+        <div class="section-intro"><div><span class="eyebrow">ANÁLISIS</span><h1>Reportes</h1><p>Resumen de facturación por proveedor y período.</p></div><button class="btn btn-outline" id="exportReport">Exportar CSV</button></div>
+        <div class="metric-grid report-metrics"><article class="metric-card"><div class="metric-top"><span>Total facturado</span><span class="metric-icon gold-icon">C$</span></div><strong id="reportTotal">—</strong><small>Importe acumulado</small></article><article class="metric-card"><div class="metric-top"><span>Promedio por factura</span><span class="metric-icon">∑</span></div><strong id="reportAverage">—</strong><small>Promedio histórico</small></article><article class="metric-card"><div class="metric-top"><span>Unidades de facturación</span><span class="metric-icon">▤</span></div><strong id="reportCount">—</strong><small>Comprobantes</small></article></div>
+        <article class="content-card"><div class="card-heading"><div><h3>Resultados por proveedor</h3><p>Importes calculados a partir de los detalles de factura.</p></div></div><div class="table-wrap"><table><thead><tr><th>Proveedor</th><th>Facturas</th><th>Total</th><th>Participación</th></tr></thead><tbody id="providerReportRows"><tr><td colspan="4">Cargando…</td></tr></tbody></table></div></article>
+      </section>
+
+      <section id="usersPage" class="page-section hidden admin-only">
+        <div class="section-intro"><div><span class="eyebrow">CONTROL DE ACCESO</span><h1>Usuarios y accesos</h1><p>Cree cuentas para el personal y asigne permisos.</p></div></div>
+        <article class="content-card"><div class="card-heading"><div><h3>Crear usuario</h3><p>El acceso se crea en Supabase Authentication.</p></div><span class="step-number">ADMIN</span></div>
+          <form id="userForm" class="form-grid"><label>Nombre completo<input name="full_name" required></label><label>Correo electrónico<input name="email" type="email" required></label><label>Contraseña temporal<input name="password" type="password" minlength="8" required><small>Mínimo 8 caracteres. Entréguesela por un canal seguro.</small></label><label>Rol<select name="role"><option value="staff">Personal</option><option value="admin">Administrador</option></select></label><div class="span-2"><button class="btn btn-primary" id="createUserBtn">＋ Crear usuario</button><span id="userMessage" class="inline-message"></span></div></form>
+        </article>
+        <article class="content-card"><div class="card-heading"><div><h3>Usuarios registrados</h3><p>Listado de cuentas creadas en el sistema.</p></div><button class="btn btn-outline btn-small" id="reloadUsers">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Último acceso</th><th>Estado</th></tr></thead><tbody id="userRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div><p class="muted small-note">La gestión de usuarios está restringida a administradores autorizados.</p></article>
+      </section>
+
+      <section id="backupPage" class="page-section hidden admin-only">
+        <div class="section-intro"><div><span class="eyebrow">SEGURIDAD DE LA INFORMACIÓN</span><h1>Respaldos</h1><p>Descargue una copia local de los registros y documentos del sistema.</p></div></div>
+        <article class="content-card backup-card"><div class="backup-symbol">⤓</div><div><h3>Crear respaldo descargable</h3><p>Genera un archivo ZIP con clientes, facturas, detalles, proveedores, contadores y fotografías de cédulas almacenadas.</p><button class="btn btn-primary" id="createBackup">Descargar respaldo ZIP</button><span id="backupMessage" class="inline-message"></span></div></article>
+        <article class="content-card"><div class="card-heading"><div><h3>Buenas prácticas de respaldo</h3><p>La copia local debe guardarse en una ubicación segura y separada del equipo de trabajo.</p></div></div><ul class="backup-tips"><li>Realice un respaldo al cierre de cada jornada o después de operaciones importantes.</li><li>Guarde una copia en un dispositivo o ubicación segura adicional.</li><li>Las fotografías de cédulas son información confidencial. No comparta el ZIP por chats ni correos sin protección.</li><li>Este respaldo descargable no sustituye los respaldos automáticos de la base de datos ni constituye una restauración automática.</li></ul></article>
+      </section>
+
+      <footer class="app-footer"><span>Desarrollado por <strong>Nayely Rubí Miranda</strong></span><span>© 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A. · Todos los derechos reservados.</span></footer>
+    </main>
+  </div>
+
+  <div id="printArea" class="hidden"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
