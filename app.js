@@ -47,6 +47,7 @@ function showPage(page){
   $('pageTitle').textContent=PAGE_TITLES[page]||'RIVER GOLD';
   document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   $('app').classList.remove('menu-open');
+  syncMenuButton();
   if(page==='dashboard') loadDashboard();
   if(page==='invoices') loadInvoices();
   if(page==='new') resetInvoiceForm();
@@ -63,7 +64,40 @@ $('loginForm').addEventListener('submit',async e=>{
 });
 $('logout').onclick=logout;
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
-$('menu').onclick=()=>$('app').classList.toggle('menu-open');
+function isMobileLayout(){return window.matchMedia('(max-width: 760px)').matches;}
+function syncMenuButton(){
+  const mobile=isMobileLayout();
+  const open=mobile?$('app').classList.contains('menu-open'):!$('app').classList.contains('sidebar-collapsed');
+  $('menu').setAttribute('aria-expanded',String(open));
+  $('menu').setAttribute('aria-label',mobile?(open?'Cerrar menú':'Abrir menú'):(open?'Contraer menú':'Expandir menú'));
+  $('menu').title=mobile?(open?'Cerrar menú':'Abrir menú'):(open?'Contraer menú':'Expandir menú');
+}
+$('menu').onclick=()=>{
+  if(isMobileLayout()) $('app').classList.toggle('menu-open');
+  else {
+    $('app').classList.toggle('sidebar-collapsed');
+    try{localStorage.setItem('riverGoldSidebarCollapsed',$('app').classList.contains('sidebar-collapsed')?'1':'0');}catch(_e){}
+  }
+  syncMenuButton();
+};
+window.addEventListener('resize',syncMenuButton);
+try{if(localStorage.getItem('riverGoldSidebarCollapsed')==='1')$('app').classList.add('sidebar-collapsed');}catch(_e){}
+syncMenuButton();
+document.querySelectorAll('[data-password-toggle]').forEach(toggle=>{
+  const input=$(toggle.dataset.passwordToggle);
+  if(!input)return;
+  toggle.addEventListener('click',()=>{
+    const reveal=input.type==='password';
+    input.type=reveal?'text':'password';
+    toggle.innerHTML=reveal
+      ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8"/><path d="M9.9 5.2A10.7 10.7 0 0112 5c6.4 0 10 7 10 7a15 15 0 01-3.2 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 003.1-.5"/></svg>'
+      :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    toggle.setAttribute('aria-label',reveal?'Ocultar contraseña':'Mostrar contraseña');
+    toggle.setAttribute('title',reveal?'Ocultar contraseña':'Mostrar contraseña');
+    toggle.setAttribute('aria-pressed',String(reveal));
+    input.focus();
+  });
+});
 $('dashboardNew').onclick=()=>showPage('new'); $('goNew').onclick=()=>showPage('new'); $('cancel').onclick=()=>showPage('invoices');
 
 async function fetchInvoices(){
