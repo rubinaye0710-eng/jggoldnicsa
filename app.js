@@ -257,12 +257,140 @@ $('createBackup').onclick=async()=>{
 };
 
 window.printInvoice=async id=>{
-  const {data:f,error}=await db.from('facturas').select('*,clientes(*),proveedores(nombre),detalles_factura(*)').eq('factura_id',id).single();
+  const {data:f,error}=await db.from('facturas')
+    .select('*,clientes(*),proveedores(nombre),detalles_factura(*)')
+    .eq('factura_id',id).single();
   if(error){alert(error.message);return;}
-  let photo='';if(f.clientes.foto_cedula){const {data}=await db.storage.from('documentos-clientes').createSignedUrl(f.clientes.foto_cedula,120);photo=data?.signedUrl||'';}
-  const details=f.detalles_factura||[];const total=details.reduce((a,d)=>a+Number(d.precio_total||0),0);
-  $('printArea').innerHTML=`<article class="print-sheet"><div class="print-head"><img src="imagenes/logo.JPG"><div class="center"><b>INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A.</b><p>RUC: ${esc(f.ruc)} &nbsp; UAF: ${esc(f.uag)}</p><p>Proveedor: ${esc(f.proveedores.nombre)} &nbsp; Factura Nº ${esc(f.numero_factura)}</p><p>Teléfonos: Tigo: 83785672 · Claro: 82265246 / 77473771</p><p>Dirección: Colonia Maximo Jerez de Yantaza 3 andenes al norte.</p><b>COMPROBANTE DE COMPRA DE MATERIAL</b></div></div><p style="text-align:right">Fecha: ${localDate(f.fecha)}</p><hr><div class="print-client"><div><h2>Detalles del Proveedor</h2><p>Cédula: ${esc(f.clientes.cedula)}</p><p>Nombre: ${esc(f.clientes.nombre)}</p><p>Teléfono: ${esc(f.clientes.telefono)}</p><p>Dirección: ${esc(f.clientes.direccion)}</p></div>${photo?`<img src="${photo}">`:''}</div><hr><h2>Detalles del Producto</h2><table><thead><tr><th>Descripción</th><th>Cantidad</th><th>Fecha entrega</th><th>Cierre</th><th>Gramos</th><th>Precio x G</th><th>Kilataje</th><th>Onzas netas</th><th>Punto</th><th>Subtotal</th></tr></thead><tbody>${details.map(d=>`<tr><td>${esc(d.descripcion)}</td><td>${esc(d.cantidad)}</td><td>${localDate(d.fecha_entrega)}</td><td>${esc(d.cierre)}</td><td>${esc(d.gramos)}</td><td>${esc(d.precio_por_gramo)}</td><td>${esc(d.kilataje)}</td><td>${esc(d.onzas)}</td><td>${esc(d.punto)}</td><td>${money(d.precio_total)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="9">TOTAL VENTA</th><th>${money(total)}</th></tr></tfoot></table><div class="print-footer"><p><b>DECLARACIÓN JURADA DE PERTENENCIA:</b><br>La persona cuyos datos se encuentran en la parte superior declara bajo juramento que es el único y legítimo propietario de los bienes descritos y asumirá la responsabilidad correspondiente frente a terceros y autoridades competentes.</p><p>ACEPTACIÓN: Al firmar este recibo, el vendedor declara estar conforme con la descripción y el monto pagado por los artículos vendidos.</p><p>COMPRADOR: ____________________ &nbsp; VENDEDOR: ____________________<br>N.º DE CÉDULA: ____________________</p><b>¡Gracias por su compra!</b></div><button class="print-button" onclick="window.print()">Imprimir factura</button></article>`;
-  $('printArea').classList.remove('hidden');$('app').classList.add('hidden');window.print();window.onafterprint=()=>{$('printArea').classList.add('hidden');$('app').classList.remove('hidden');};
+
+  // La fotografía de cédula permanece en Storage privado y se consulta con URL firmada.
+  let photo='';
+  if(f.clientes?.foto_cedula){
+    const {data,error:photoError}=await db.storage.from('documentos-clientes')
+      .createSignedUrl(f.clientes.foto_cedula,120);
+    if(!photoError) photo=data?.signedUrl||'';
+  }
+
+  const details=f.detalles_factura||[];
+  const total=details.reduce((sum,d)=>sum+Number(d.precio_total||0),0);
+  const totalGramos=details.reduce((sum,d)=>sum+Number(d.gramos||0),0);
+  const totalOnzas=details.reduce((sum,d)=>sum+Number(d.onzas||0),0);
+
+  $('printArea').innerHTML=`
+    <style>
+      .rg-print{max-width:1080px;margin:20px auto;padding:30px 34px;background:#fff;color:#182a3b;
+        font-family:Arial,Helvetica,sans-serif;border:1px solid #e7dfd1;box-shadow:0 8px 30px #14283b12}
+      .rg-print *{box-sizing:border-box}
+      .rg-print-head{display:grid;grid-template-columns:118px 1fr auto;gap:20px;align-items:center;
+        border-bottom:3px solid #c49a4a;padding-bottom:18px}
+      .rg-print-logo{width:112px;height:112px;object-fit:contain;border-radius:8px}
+      .rg-print-brand{text-align:center}
+      .rg-print-brand h1{font-family:Georgia,serif;font-size:27px;letter-spacing:2px;margin:0;color:#14283b}
+      .rg-print-brand .company{font-size:10px;font-weight:700;letter-spacing:1px;margin:7px 0;color:#8b672d}
+      .rg-print-brand p{font-size:10px;line-height:1.5;margin:3px 0;color:#455366}
+      .rg-print-title{text-align:right;min-width:145px}
+      .rg-print-title strong{display:block;font-family:Georgia,serif;font-size:20px;color:#14283b;letter-spacing:1px}
+      .rg-print-title span{display:block;margin-top:8px;font-size:12px;color:#8b672d;font-weight:700}
+      .rg-print-title small{display:block;margin-top:5px;color:#64748b;font-size:11px}
+      .rg-print-client{display:grid;grid-template-columns:1fr 160px;gap:18px;margin:20px 0;padding:16px 18px;
+        border:1px solid #e7dfd1;border-left:4px solid #c49a4a;border-radius:8px;background:#fcfbf8}
+      .rg-print h2{font-family:Georgia,serif;font-size:16px;margin:0 0 12px;color:#14283b}
+      .rg-client-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+      .rg-client-grid p{margin:0;font-size:12px;color:#334155}
+      .rg-client-grid b{color:#14283b}
+      .rg-print-photo{width:150px;height:118px;object-fit:contain;border:1px solid #d9d4ca;border-radius:6px;background:white}
+      .rg-no-photo{width:150px;height:118px;display:grid;place-items:center;border:1px dashed #c8c0b2;border-radius:6px;color:#788393;font-size:11px}
+      .rg-section-title{display:flex;align-items:end;justify-content:space-between;margin:18px 0 9px}
+      .rg-section-title h2{margin:0}
+      .rg-section-title span{font-size:10px;color:#64748b}
+      .rg-print-table{width:100%;border-collapse:collapse;table-layout:auto;font-size:10px}
+      .rg-print-table th{background:#14283b;color:#fff;padding:9px 6px;border:1px solid #14283b;text-align:center;font-weight:700}
+      .rg-print-table td{padding:8px 5px;border:1px solid #dedbd4;text-align:center;color:#263445;white-space:normal}
+      .rg-print-table tbody tr:nth-child(even){background:#faf8f3}
+      .rg-print-table tfoot td{background:#f4efe4;font-weight:700;color:#14283b}
+      .rg-print-table .money{text-align:right;white-space:nowrap}
+      .rg-print-totals{display:flex;justify-content:flex-end;gap:22px;flex-wrap:wrap;margin:12px 0 0;font-size:11px;color:#475569}
+      .rg-print-totals strong{color:#14283b}
+      .rg-print-grand{display:flex;justify-content:flex-end;align-items:center;gap:18px;margin:14px 0 20px;
+        padding:13px 16px;background:#f5f0e6;border:1px solid #e6d8bd;border-radius:7px}
+      .rg-print-grand span{font-size:12px;font-weight:700;color:#59472a;letter-spacing:.7px}
+      .rg-print-grand strong{font-family:Georgia,serif;font-size:23px;color:#14283b}
+      .rg-print-legal{padding:12px 14px;border-top:1px solid #e4ded3;border-bottom:1px solid #e4ded3;
+        font-size:10px;line-height:1.55;color:#586474;text-align:justify}
+      .rg-signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin:48px 22px 16px;text-align:center}
+      .rg-signatures div{border-top:1px solid #64748b;padding-top:8px;font-size:10px;font-weight:700;letter-spacing:1px;color:#14283b}
+      .rg-print-thanks{text-align:center;margin-top:22px;color:#98702f;font-family:Georgia,serif;font-weight:700;letter-spacing:1px}
+      .rg-print-footer{text-align:center;margin-top:15px;padding-top:10px;border-top:1px solid #e6e0d5;color:#7b8490;font-size:9px;letter-spacing:.4px}
+      .rg-print-button{display:block;margin:18px auto 0;background:#14283b;color:#fff;border:0;border-radius:6px;padding:10px 18px;font-weight:700;cursor:pointer}
+      @page{size:landscape;margin:10mm}
+      @media print{body{background:#fff!important}.rg-print{max-width:none;margin:0;padding:0;border:0;box-shadow:none}
+        .rg-print-button{display:none!important}.rg-print-head{grid-template-columns:95px 1fr auto;gap:12px;padding-bottom:10px}
+        .rg-print-logo{width:90px;height:90px}.rg-print-brand h1{font-size:23px}.rg-print-client{margin:12px 0;padding:10px 12px}
+        .rg-print-table{font-size:9px}.rg-print-table th,.rg-print-table td{padding:6px 4px}
+        .rg-signatures{margin-top:32px}.rg-print-legal{font-size:9px}}
+      @media screen and (max-width:760px){.rg-print{padding:16px}.rg-print-head{grid-template-columns:70px 1fr}.rg-print-logo{width:68px;height:68px}
+        .rg-print-title{grid-column:1/-1;text-align:center}.rg-print-client{grid-template-columns:1fr}.rg-client-grid{grid-template-columns:1fr}
+        .rg-print-table{font-size:9px}.rg-print-table th,.rg-print-table td{padding:5px 3px}}
+    </style>
+    <article class="rg-print">
+      <header class="rg-print-head">
+        <img class="rg-print-logo" src="imagenes/logo.JPG" alt="River Gold - Julio Ríos">
+        <div class="rg-print-brand">
+          <h1>RIVER GOLD</h1>
+          <p class="company">INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A.</p>
+          <p><b>RUC:</b> ${esc(f.ruc)} &nbsp; <b>UAF:</b> ${esc(f.uag)}</p>
+          <p><b>Teléfonos:</b> Tigo: 83785672 · Claro: 82265246 / 77473771</p>
+          <p><b>Dirección:</b> Colonia Máximo Jerez, de Yantaza 3 andenes al norte.</p>
+        </div>
+        <div class="rg-print-title">
+          <strong>RECIBO DE PAGO</strong>
+          <span>N.º ${esc(f.numero_factura)}</span>
+          <small>Fecha: ${localDate(f.fecha)}</small>
+          <small>Proveedor: ${esc(f.proveedores?.nombre||'')}</small>
+        </div>
+      </header>
+
+      <section class="rg-print-client">
+        <div>
+          <h2>Datos del cliente</h2>
+          <div class="rg-client-grid">
+            <p><b>Cliente:</b> ${esc(f.clientes?.nombre||'')}</p>
+            <p><b>Identidad:</b> ${esc(f.clientes?.cedula||'')}</p>
+            <p><b>Teléfono:</b> ${esc(f.clientes?.telefono||'')}</p>
+            <p><b>Dirección:</b> ${esc(f.clientes?.direccion||'')}</p>
+          </div>
+        </div>
+        <div>${photo?`<img class="rg-print-photo" src="${photo}" alt="Fotografía de cédula del cliente">`:`<div class="rg-no-photo">Fotografía no disponible</div>`}</div>
+      </section>
+
+      <div class="rg-section-title"><h2>Detalle del material recibido</h2><span>Valores expresados en córdobas (C$)</span></div>
+      <table class="rg-print-table">
+        <thead><tr>
+          <th>Descripción</th><th>Cantidad</th><th>Fecha de entrega</th><th>Cierre</th>
+          <th>Gramos</th><th>P. x gramo</th><th>Kilataje</th><th>Onzas netas</th><th>Punto</th><th>Importe</th>
+        </tr></thead>
+        <tbody>${details.map(d=>`<tr>
+          <td>${esc(d.descripcion)}</td><td>${esc(d.cantidad)}</td><td>${localDate(d.fecha_entrega)}</td>
+          <td>${esc(d.cierre)}</td><td>${esc(d.gramos)}</td><td>${money(d.precio_por_gramo)}</td>
+          <td>${esc(d.kilataje)}</td><td>${esc(d.onzas)}</td><td>${esc(d.punto)}</td><td class="money">${money(d.precio_total)}</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4">TOTALES</td><td>${totalGramos.toFixed(2)}</td><td></td><td></td><td>${totalOnzas.toFixed(2)}</td><td></td><td class="money">${money(total)}</td></tr></tfoot>
+      </table>
+
+      <div class="rg-print-grand"><span>IMPORTE TOTAL DEL RECIBO</span><strong>${money(total)}</strong></div>
+      <div class="rg-print-legal"><b>DECLARACIÓN DE PERTENENCIA:</b> La persona cuyos datos se encuentran en este comprobante declara ser la legítima propietaria del material descrito y asume la responsabilidad correspondiente sobre su procedencia.</div>
+      <div class="rg-signatures"><div>RECIBÍ CONFORME</div><div>ENTREGUÉ CONFORME</div></div>
+      <div class="rg-print-thanks">¡Gracias por su confianza!</div>
+      <footer class="rg-print-footer">Desarrollado por Nayely Rubí Miranda · © 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A. · Todos los derechos reservados.</footer>
+      <button class="rg-print-button" onclick="window.print()">Imprimir recibo</button>
+    </article>`;
+
+  $('printArea').classList.remove('hidden');
+  $('app').classList.add('hidden');
+  // Esperar a que las imágenes estén listas antes de abrir el diálogo de impresión.
+  const images=[...$('printArea').querySelectorAll('img')];
+  await Promise.all(images.map(img=>img.decode?img.decode().catch(()=>{}):new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;})));
+  window.print();
+  window.onafterprint=()=>{$('printArea').classList.add('hidden');$('app').classList.remove('hidden');};
 };
 
 init();
