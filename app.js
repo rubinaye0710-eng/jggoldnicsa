@@ -1,4 +1,3 @@
-
 const { createClient } = supabase;
 const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
@@ -274,7 +273,6 @@ window.printInvoice=async id=>{
   const details=f.detalles_factura||[];
   const total=details.reduce((sum,d)=>sum+Number(d.precio_total||0),0);
   const totalGramos=details.reduce((sum,d)=>sum+Number(d.gramos||0),0);
-  const totalOnzas=details.reduce((sum,d)=>sum+Number(d.onzas||0),0);
 
   $('printArea').innerHTML=`
     <style>
@@ -366,15 +364,20 @@ window.printInvoice=async id=>{
       <div class="rg-section-title"><h2>Detalle del material recibido</h2><span>Valores expresados en córdobas (C$)</span></div>
       <table class="rg-print-table">
         <thead><tr>
-          <th>Descripción</th><th>Cantidad</th><th>Fecha de entrega</th><th>Cierre</th>
-          <th>Gramos</th><th>P. x gramo</th><th>Kilataje</th><th>Onzas netas</th><th>Punto</th><th>Importe</th>
+          <th>Kilataje</th><th>Descripción</th><th>P. x gramo</th><th>P. Neto</th><th>Importe</th>
         </tr></thead>
         <tbody>${details.map(d=>`<tr>
-          <td>${esc(d.descripcion)}</td><td>${esc(d.cantidad)}</td><td>${localDate(d.fecha_entrega)}</td>
-          <td>${esc(d.cierre)}</td><td>${esc(d.gramos)}</td><td>${money(d.precio_por_gramo)}</td>
-          <td>${esc(d.kilataje)}</td><td>${esc(d.onzas)}</td><td>${esc(d.punto)}</td><td class="money">${money(d.precio_total)}</td>
+          <td>${esc(d.kilataje)}</td>
+          <td>${esc(d.descripcion)}</td>
+          <td class="money">${money(d.precio_por_gramo)}</td>
+          <td>${Number(d.gramos||0).toFixed(2)}</td>
+          <td class="money">${money(d.precio_total)}</td>
         </tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="4">TOTALES</td><td>${totalGramos.toFixed(2)}</td><td></td><td></td><td>${totalOnzas.toFixed(2)}</td><td></td><td class="money">${money(total)}</td></tr></tfoot>
+        <tfoot><tr>
+          <td colspan="3">TOTALES</td>
+          <td>${totalGramos.toFixed(2)}</td>
+          <td class="money">${money(total)}</td>
+        </tr></tfoot>
       </table>
 
       <div class="rg-print-grand"><span>IMPORTE TOTAL DEL RECIBO</span><strong>${money(total)}</strong></div>
