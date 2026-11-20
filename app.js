@@ -1,3 +1,4 @@
+
 const { createClient } = supabase;
 const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
