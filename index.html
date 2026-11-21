@@ -48,6 +48,7 @@
       <div class="side-label admin-label">ADMINISTRACIÓN</div>
       <nav class="nav-list admin-nav">
         <button class="nav admin-only" data-page="users"><span class="nav-icon">♧</span>Usuarios y accesos</button>
+        <button class="nav admin-only" data-page="trash"><span class="nav-icon">▣</span>Papelera</button>
         <button class="nav admin-only" data-page="backup"><span class="nav-icon">⤓</span>Respaldos</button>
       </nav>
       <div class="side-bottom">
@@ -81,8 +82,8 @@
       </section>
 
       <section id="invoicePage" class="page-section hidden">
-        <div class="section-intro"><div><span class="eyebrow">OPERACIONES</span><h1>Facturas</h1><p>Consulta, filtra e imprime comprobantes.</p></div><button class="btn btn-primary" id="goNew">＋ Nueva factura</button></div>
-        <article class="content-card"><div class="filters"><input id="filter" placeholder="Buscar por número, cliente o proveedor…"><button id="refresh" class="btn btn-outline">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Acciones</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></article>
+        <div class="section-intro"><div><span class="eyebrow">OPERACIONES</span><h1>Facturas</h1><p>Consulta las facturas activas de los tres proveedores. Cada cuenta registra nuevas operaciones únicamente para su proveedor asignado.</p></div><button class="btn btn-primary" id="goNew">＋ Nueva factura</button></div>
+        <article class="content-card"><div class="filters"><input id="filter" placeholder="Buscar por número, cliente o proveedor…"><button id="refresh" class="btn btn-outline">Actualizar</button></div><p class="muted small-note">Este listado reúne las facturas activas de Julio, Alfredo y Dwayne. El personal puede consultar los registros de todos; la impresión completa queda limitada al proveedor asignado. La administradora tiene acceso total.</p><div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Importe</th><th>Acciones</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div></article>
       </section>
 
       <section id="newPage" class="page-section hidden">
@@ -129,11 +130,17 @@
               </div>
               <small>Mínimo 8 caracteres. Entréguesela por un canal seguro.</small>
             </div>
-            <label>Rol<select name="role"><option value="staff">Personal</option><option value="admin">Administrador</option></select></label>
+            <label>Rol<select name="role" id="newUserRole"><option value="staff">Personal / Proveedor</option><option value="admin">Administrador</option></select></label>
+            <label id="newUserProviderWrap">Proveedor asignado<select name="provider_id" id="newUserProvider" required><option value="1">Julio Ríos</option><option value="2">Alfredo Sánchez</option><option value="3">Dwayne Darren</option></select></label>
             <div class="span-2"><button class="btn btn-primary" id="createUserBtn">＋ Crear usuario</button><span id="userMessage" class="inline-message"></span></div>
           </form>
         </article>
-        <article class="content-card"><div class="card-heading"><div><h3>Usuarios registrados</h3><p>Listado de cuentas creadas en el sistema.</p></div><button class="btn btn-outline btn-small" id="reloadUsers">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Último acceso</th><th>Estado</th></tr></thead><tbody id="userRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div><p class="muted small-note">La gestión de usuarios está restringida a administradores autorizados.</p></article>
+        <article class="content-card"><div class="card-heading"><div><h3>Usuarios registrados</h3><p>Listado de cuentas creadas en el sistema.</p></div><button class="btn btn-outline btn-small" id="reloadUsers">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Proveedor</th><th>Último acceso</th><th>Estado</th></tr></thead><tbody id="userRows"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div><p class="muted small-note">La gestión de usuarios está restringida a administradores autorizados.</p></article>
+      </section>
+
+      <section id="trashPage" class="page-section hidden admin-only">
+        <div class="section-intro"><div><span class="eyebrow">CONTROL DE DOCUMENTOS</span><h1>Papelera de facturas</h1><p>Las facturas enviadas aquí conservan sus datos, detalles, fotografías y numeración. Puedes restaurarlas cuando sea necesario.</p></div><button class="btn btn-outline btn-small" id="reloadTrash">Actualizar</button></div>
+        <article class="content-card"><div class="table-wrap"><table><thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Cliente</th><th>Eliminada el</th><th>Acciones</th></tr></thead><tbody id="trashRows"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div><p id="trashMessage" class="inline-message"></p></article>
       </section>
 
       <section id="backupPage" class="page-section hidden admin-only">

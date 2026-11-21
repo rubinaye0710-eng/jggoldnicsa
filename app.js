@@ -6,7 +6,8 @@ let currentProfile = { role: 'staff', full_name: '' };
 let invoices = [];
 let clientRowsCache = [];
 let reportRowsCache = [];
-const PAGE_TITLES = { dashboard:'Resumen general', invoices:'Facturas', new:'Nueva factura', clients:'Clientes', reports:'Reportes', users:'Usuarios y accesos', backup:'Respaldos' };
+const PAGE_TITLES = { dashboard:'Resumen general', invoices:'Facturas', new:'Nueva factura', clients:'Clientes', reports:'Reportes', users:'Usuarios y accesos', trash:'Papelera de facturas', backup:'Respaldos' };
+const PROVIDERS = [{id:1,name:'Julio Ríos'},{id:2,name:'Alfredo Sánchez'},{id:3,name:'Dwayne Darren'}];
 const money = n => 'C$ ' + Number(n || 0).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isAdmin = () => currentProfile.role === 'admin';
@@ -31,18 +32,18 @@ async function enter(user){
   showPage('dashboard');
 }
 async function loadProfile(){
-  const {data,error}=await db.from('profiles').select('full_name,role').eq('id',currentUser.id).maybeSingle();
-  if(error || !data){ currentProfile={role:'staff',full_name:currentUser.email?.split('@')[0]||'Usuario'}; $('profileNotice').textContent='No se encontró el perfil de acceso. Solicita al administrador completar la configuración de roles en Supabase.'; $('profileNotice').classList.remove('hidden'); }
+  const {data,error}=await db.from('profiles').select('full_name,role,provider_id').eq('id',currentUser.id).maybeSingle();
+  if(error || !data){ currentProfile={role:'staff',provider_id:null,full_name:currentUser.email?.split('@')[0]||'Usuario'}; $('profileNotice').textContent='No se encontró el perfil de acceso. Solicita al administrador completar la configuración de roles en Supabase.'; $('profileNotice').classList.remove('hidden'); }
   else {currentProfile=data; $('profileNotice').classList.add('hidden');}
   const displayName=currentProfile.full_name||currentUser.email||'Usuario';
-  $('userName').textContent=displayName; $('userRole').textContent=isAdmin()?'Administrador':'Personal'; $('userAvatar').textContent=initials(displayName);
+  $('userName').textContent=displayName; const assignedProvider=PROVIDERS.find(p=>p.id===Number(currentProfile.provider_id)); $('userRole').textContent=isAdmin()?'Administrador':(assignedProvider?.name||'Personal sin proveedor'); $('userAvatar').textContent=initials(displayName);
   document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',!isAdmin()));
   document.querySelector('.admin-label').classList.toggle('hidden',!isAdmin());
 }
 function showPage(page){
-  if(['users','backup'].includes(page) && !isAdmin()){alert('Esta sección está disponible únicamente para administradores.');page='dashboard';}
+  if(['users','backup','trash'].includes(page) && !isAdmin()){alert('Esta sección está disponible únicamente para administradores.');page='dashboard';}
   document.querySelectorAll('.page-section').forEach(s=>s.classList.add('hidden'));
-  const map={dashboard:'dashboardPage',invoices:'invoicePage',new:'newPage',clients:'clientsPage',reports:'reportsPage',users:'usersPage',backup:'backupPage'};
+  const map={dashboard:'dashboardPage',invoices:'invoicePage',new:'newPage',clients:'clientsPage',reports:'reportsPage',users:'usersPage',trash:'trashPage',backup:'backupPage'};
   $(map[page]).classList.remove('hidden');
   $('pageTitle').textContent=PAGE_TITLES[page]||'RIVER GOLD';
   document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
@@ -54,6 +55,7 @@ function showPage(page){
   if(page==='clients') loadClients();
   if(page==='reports') loadReports();
   if(page==='users') loadUsers();
+  if(page==='trash') loadTrash();
 }
 async function logout(){await db.auth.signOut();currentUser=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();}
 $('loginForm').addEventListener('submit',async e=>{
@@ -101,7 +103,7 @@ document.querySelectorAll('[data-password-toggle]').forEach(toggle=>{
 $('dashboardNew').onclick=()=>showPage('new'); $('goNew').onclick=()=>showPage('new'); $('cancel').onclick=()=>showPage('invoices');
 
 async function fetchInvoices(){
-  const {data,error}=await db.from('facturas').select('factura_id,numero_factura,fecha,ruc,uag,proveedor_id,proveedores(nombre),clientes(cliente_id,nombre,cedula),detalles_factura(detalle_id,precio_total,gramos,onzas)').order('factura_id',{ascending:false});
+  const {data,error}=await db.from('facturas').select('factura_id,numero_factura,fecha,ruc,uag,proveedor_id,deleted_at,proveedores(nombre),clientes(cliente_id,nombre,cedula),detalles_factura(detalle_id,precio_total,gramos,onzas)').is('deleted_at',null).order('factura_id',{ascending:false});
   if(error) throw error; return data||[];
 }
 function invoiceTotal(f){return (f.detalles_factura||[]).reduce((sum,d)=>sum+Number(d.precio_total||0),0);}
@@ -131,26 +133,50 @@ function renderSalesChart(months){
   $('salesChart').innerHTML=months.map(m=>`<div class="bar-item"><span class="bar-value">${m.value?money(m.value).replace('C$ ',''): '0.00'}</span><div class="bar-column" style="height:${Math.max(3,(m.value/max)*125)}px" title="${money(m.value)}"></div><span class="bar-label">${esc(m.label)}</span></div>`).join('');
 }
 
+// El listado general muestra las facturas activas de los tres proveedores.
+// El RPC solo devuelve un resumen operativo (sin cédula, dirección ni fotografía).
 async function loadInvoices(){
-  $('invoiceRows').innerHTML='<tr><td colspan="5">Cargando…</td></tr>';
-  try{invoices=await fetchInvoices();renderInvoices();}
-  catch(error){$('invoiceRows').innerHTML=`<tr><td colspan="5">${esc(error.message)}</td></tr>`;}
+  $('invoiceRows').innerHTML='<tr><td colspan="6">Cargando…</td></tr>';
+  try{
+    const {data,error}=await db.rpc('listar_facturas_globales');
+    if(error) throw error;
+    invoices=data||[];
+    renderInvoices();
+  }catch(error){$('invoiceRows').innerHTML=`<tr><td colspan="6">${esc(error.message)}</td></tr>`;}
 }
 function renderInvoices(){
   const term=$('filter').value.toLowerCase();
-  const rows=invoices.filter(f=>[f.numero_factura,f.proveedores?.nombre,f.clientes?.nombre,f.fecha].join(' ').toLowerCase().includes(term));
-  $('invoiceRows').innerHTML=rows.length?rows.map(f=>`<tr><td>${esc(f.numero_factura)}</td><td>${esc(f.proveedores?.nombre)}</td><td>${localDate(f.fecha)}</td><td>${esc(f.clientes?.nombre)}</td><td><div class="actions"><button class="btn btn-outline btn-small" onclick="printInvoice(${f.factura_id})">Imprimir</button>${isAdmin()?`<button class="danger" onclick="deleteInvoice(${f.factura_id})">Eliminar</button>`:''}</div></td></tr>`).join(''):'<tr><td colspan="5">No hay facturas para mostrar.</td></tr>';
+  const rows=invoices.filter(f=>[f.numero_factura,f.proveedor_nombre,f.cliente_nombre,f.fecha].join(' ').toLowerCase().includes(term));
+  $('invoiceRows').innerHTML=rows.length?rows.map(f=>{
+    const canPrint=isAdmin() || Number(f.proveedor_id)===Number(currentProfile.provider_id);
+    const actions=canPrint
+      ? `<button class="btn btn-outline btn-small" onclick="printInvoice(${f.factura_id})">Imprimir</button>`
+      : '<span class="muted" title="La impresión completa corresponde al proveedor asignado o a la administradora">Solo consulta</span>';
+    return `<tr><td>${esc(f.numero_factura)}</td><td>${esc(f.proveedor_nombre)}</td><td>${localDate(f.fecha)}</td><td>${esc(f.cliente_nombre)}</td><td>${money(f.total)}</td><td><div class="actions">${actions}${isAdmin()?`<button class="danger" onclick="deleteInvoice(${f.factura_id})">Papelera</button>`:''}</div></td></tr>`;
+  }).join(''):'<tr><td colspan="6">No hay facturas para mostrar.</td></tr>';
 }
 $('filter').oninput=renderInvoices; $('refresh').onclick=loadInvoices;
-window.deleteInvoice=async id=>{if(!isAdmin()){alert('Solo un administrador puede eliminar facturas.');return;}if(!confirm('¿Eliminar esta factura? Esta acción no se puede deshacer.'))return;const {error}=await db.from('facturas').delete().eq('factura_id',id);if(error)alert(error.message);else{await loadInvoices();await loadDashboard();}};
+window.deleteInvoice=async id=>{if(!isAdmin()){alert('Solo un administrador puede enviar facturas a la papelera.');return;}if(!confirm('¿Enviar esta factura a la papelera? Podrás restaurarla después.'))return;const {error}=await db.rpc('mover_factura_papelera',{p_factura_id:Number(id)});if(error){alert(error.message);return;}await loadInvoices();await loadDashboard();alert('Factura enviada a la papelera. Su número y sus datos se conservaron.');};
 
-function resetInvoiceForm(){ $('invoiceForm').reset(); $('itemRows').innerHTML=''; addItem(); updateTotal(); loadNextNumber(); setMessage('formMessage',''); }
+function applyProviderAccess(){
+  const select=$('provider');
+  const label=select.closest('label');
+  if(!select) return;
+  if(isAdmin()){select.disabled=false;label?.classList.remove('assigned-provider');}
+  else {
+    const assigned=Number(currentProfile.provider_id||0);
+    select.value=String(assigned);select.disabled=true;label?.classList.add('assigned-provider');
+    if(!assigned) setMessage('formMessage','Tu cuenta todavía no tiene un proveedor asignado. Solicita al administrador que lo configure.',true);
+  }
+}
+function resetInvoiceForm(){ $('invoiceForm').reset(); $('provider').disabled=false; $('itemRows').innerHTML=''; applyProviderAccess(); addItem(); updateTotal(); loadNextNumber(); setMessage('formMessage',''); }
 async function loadNextNumber(){
-  const provider=Number($('provider').value);
+  const provider=Number(isAdmin()?$('provider').value:currentProfile.provider_id);
+  if(!provider){$('invoiceNumber').value='Proveedor sin asignar';return;}
   const {data,error}=await db.from('factura_contadores').select('contador_actual').eq('proveedor_id',provider).maybeSingle();
   $('invoiceNumber').value=error?'No disponible':String((data?.contador_actual??0)+1);
 }
-$('provider').onchange=loadNextNumber;
+$('provider').onchange=()=>{if(isAdmin())loadNextNumber();};
 function addItem(){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input data-k="descripcion" required></td><td><input data-k="cantidad" type="number" min="1" step="1" required value="1"></td><td><input data-k="fecha_entrega" type="date" required></td><td><input data-k="cierre" required></td><td><input data-k="gramos" type="number" min="0" step=".01" required value="0"></td><td><input data-k="precio_por_gramo" type="number" min="0" step=".01" required value="0"></td><td><input data-k="kilataje"></td><td><input data-k="onzas" type="number" min="0" step=".01" value="0" required></td><td><input data-k="punto"></td><td><input data-k="precio_total" readonly value="0.00"></td><td><button type="button" class="danger">×</button></td>`;
@@ -171,13 +197,16 @@ $('invoiceForm').addEventListener('submit',async e=>{
   let uploadedPath=null;
   try{
     const fd=new FormData(form), file=fd.get('fotoCedula');
+    const assignedProvider=Number(isAdmin()?$('provider').value:currentProfile.provider_id);
+    if(!assignedProvider) throw Error('Tu usuario no tiene un proveedor asignado. Contacta a la administradora.');
     if(!file||!file.size)throw Error('Adjunta la foto de la cédula.');
     if(!file.type.startsWith('image/'))throw Error('El archivo debe ser una imagen.');
-    uploadedPath=`cedulas/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+    // El proveedor en la ruta permite que Storage aplique permisos por cuenta.
+    uploadedPath=`cedulas/provider-${assignedProvider}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
     const up=await db.storage.from('documentos-clientes').upload(uploadedPath,file,{upsert:false,contentType:file.type}); if(up.error)throw up.error;
     const details=[...$('itemRows').querySelectorAll('tr')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value);return o;});
     if(!details.length)throw Error('Agrega al menos un detalle.');
-    const payload={cliente:{nombre:fd.get('clienteNombre'),telefono:fd.get('telefono'),cedula:fd.get('cedula'),direccion:fd.get('clienteDireccion'),foto_cedula:uploadedPath},proveedor_id:Number(fd.get('proveedor')),ruc:fd.get('ruc'),uag:fd.get('uag'),detalles:details};
+    const payload={cliente:{nombre:fd.get('clienteNombre'),telefono:fd.get('telefono'),cedula:fd.get('cedula'),direccion:fd.get('clienteDireccion'),foto_cedula:uploadedPath},proveedor_id:assignedProvider,ruc:fd.get('ruc'),uag:fd.get('uag'),detalles:details};
     const {error}=await db.rpc('crear_factura',{p_payload:payload}); if(error)throw error;
     alert('Factura guardada correctamente.');showPage('invoices');
   }catch(err){if(uploadedPath)await db.storage.from('documentos-clientes').remove([uploadedPath]);setMessage('formMessage',err.message||'No fue posible guardar la factura.',true);}
@@ -217,27 +246,66 @@ async function invokeAdmin(action,body){
   if(error)throw error; if(data?.error)throw new Error(data.error); return data;
 }
 async function loadUsers(){
-  $('userRows').innerHTML='<tr><td colspan="5">Cargando…</td></tr>';
+  $('userRows').innerHTML='<tr><td colspan="6">Cargando…</td></tr>';
   try{
     const result=await invokeAdmin('list');
-    $('userRows').innerHTML=(result.users||[]).map(u=>`<tr><td>${esc(u.full_name||'—')}</td><td>${esc(u.email)}</td><td><select class="role-select" data-user-id="${esc(u.id)}"><option value="staff" ${u.role==='staff'?'selected':''}>Personal</option><option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option></select></td><td>${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-NI'):'Sin acceso'}</td><td><span class="status-pill ${u.banned_until?'inactive':''}">${u.banned_until?'Suspendido':'Activo'}</span></td></tr>`).join('')||'<tr><td colspan="5">No hay usuarios registrados.</td></tr>';
-    $('userRows').querySelectorAll('select').forEach(sel=>sel.onchange=async()=>{if(!confirm('¿Cambiar el rol de este usuario?')){await loadUsers();return;}try{await invokeAdmin('update',{user_id:sel.dataset.userId,role:sel.value});alert('Rol actualizado.');}catch(e){alert(e.message);await loadUsers();}});
-  }catch(err){$('userRows').innerHTML=`<tr><td colspan="5">${esc(err.message)}<br><small>Verifica que la función admin-users esté desplegada y que tu cuenta tenga rol administrador.</small></td></tr>`;}
+    $('userRows').innerHTML=(result.users||[]).map(u=>{
+      const providerOptions=PROVIDERS.map(p=>`<option value="${p.id}" ${Number(u.provider_id)===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+      const roleOptions=`<option value="staff" ${u.role==='staff'?'selected':''}>Personal</option><option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>`;
+      return `<tr><td>${esc(u.full_name||'—')}</td><td>${esc(u.email)}</td><td><select class="role-select" data-user-id="${esc(u.id)}" data-field="role">${roleOptions}</select></td><td><select class="role-select provider-user-select" data-user-id="${esc(u.id)}" data-field="provider_id" ${u.role==='admin'?'disabled':''}><option value="">Sin asignar</option>${providerOptions}</select></td><td>${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-NI'):'Sin acceso'}</td><td><span class="status-pill ${u.banned_until?'inactive':''}">${u.banned_until?'Suspendido':'Activo'}</span></td></tr>`;
+    }).join('')||'<tr><td colspan="6">No hay usuarios registrados.</td></tr>';
+    $('userRows').querySelectorAll('tr').forEach(row=>{
+      const roleSelect=row.querySelector('select[data-field="role"]');
+      const providerSelect=row.querySelector('select[data-field="provider_id"]');
+      if(!roleSelect||!providerSelect)return;
+      const syncProviderControl=()=>{providerSelect.disabled=roleSelect.value==='admin';};
+      const saveAssignment=async()=>{
+        const role=roleSelect.value;
+        const provider_id=role==='admin'?null:Number(providerSelect.value||0);
+        if(role==='staff'&&!provider_id){alert('Selecciona el proveedor asignado.');return;}
+        if(!confirm('¿Guardar el rol y proveedor asignado de esta cuenta?')){await loadUsers();return;}
+        try{await invokeAdmin('update',{user_id:roleSelect.dataset.userId,role,provider_id});alert('Usuario actualizado.');await loadUsers();}
+        catch(e){alert(e.message);await loadUsers();}
+      };
+      roleSelect.addEventListener('change',()=>{syncProviderControl();if(roleSelect.value==='admin'||providerSelect.value)saveAssignment();});
+      providerSelect.addEventListener('change',saveAssignment);
+      syncProviderControl();
+    });
+  }catch(err){$('userRows').innerHTML=`<tr><td colspan="6">${esc(err.message)}<br><small>Verifica que la función admin-users esté desplegada y que tu cuenta tenga rol administrador.</small></td></tr>`;}
 }
 $('reloadUsers').onclick=loadUsers;
+$('newUserRole').addEventListener('change',()=>{const admin=$('newUserRole').value==='admin';$('newUserProviderWrap').classList.toggle('hidden',admin);$('newUserProvider').required=!admin;});
+$('newUserRole').dispatchEvent(new Event('change'));
 $('userForm').addEventListener('submit',async e=>{
   e.preventDefault();const b=$('createUserBtn');b.disabled=true;setMessage('userMessage','Creando usuario…');
-  try{const fd=new FormData(e.currentTarget);await invokeAdmin('create',{email:fd.get('email'),password:fd.get('password'),full_name:fd.get('full_name'),role:fd.get('role')});e.currentTarget.reset();setMessage('userMessage','Usuario creado correctamente.');await loadUsers();}
+  try{const fd=new FormData(e.currentTarget);const role=fd.get('role');await invokeAdmin('create',{email:fd.get('email'),password:fd.get('password'),full_name:fd.get('full_name'),role,provider_id:role==='admin'?null:Number(fd.get('provider_id'))});e.currentTarget.reset();$('newUserRole').dispatchEvent(new Event('change'));setMessage('userMessage','Usuario creado correctamente con su proveedor asignado.');await loadUsers();}
   catch(err){setMessage('userMessage',err.message,true);}
   finally{b.disabled=false;}
 });
+
+async function loadTrash(){
+  $('trashRows').innerHTML='<tr><td colspan="6">Cargando papelera…</td></tr>';
+  setMessage('trashMessage','');
+  const {data,error}=await db.from('facturas').select('factura_id,numero_factura,fecha,deleted_at,proveedor_id,proveedores(nombre),clientes(nombre)').not('deleted_at','is',null).order('deleted_at',{ascending:false});
+  if(error){$('trashRows').innerHTML=`<tr><td colspan="6">${esc(error.message)}</td></tr>`;return;}
+  $('trashRows').innerHTML=(data||[]).map(f=>`<tr><td>${esc(f.numero_factura)}</td><td>${esc(f.proveedores?.nombre)}</td><td>${localDate(f.fecha)}</td><td>${esc(f.clientes?.nombre)}</td><td>${f.deleted_at?new Date(f.deleted_at).toLocaleString('es-NI'):'—'}</td><td><div class="actions"><button class="btn btn-primary btn-small" onclick="restoreInvoice(${f.factura_id})">Restaurar</button><button class="btn btn-outline btn-small" onclick="printInvoice(${f.factura_id})">Imprimir</button></div></td></tr>`).join('')||'<tr><td colspan="6">La papelera está vacía.</td></tr>';
+}
+$('reloadTrash').onclick=loadTrash;
+window.restoreInvoice=async id=>{
+  if(!isAdmin()){alert('Solo una administradora puede restaurar facturas.');return;}
+  if(!confirm('¿Restaurar esta factura? Volverá al listado activo con el mismo número.'))return;
+  const {error}=await db.rpc('restaurar_factura',{p_factura_id:Number(id)});
+  if(error){alert(error.message);return;}
+  setMessage('trashMessage','Factura restaurada correctamente.');
+  await loadTrash();await loadInvoices();await loadDashboard();
+};
 
 $('createBackup').onclick=async()=>{
   const btn=$('createBackup');btn.disabled=true;setMessage('backupMessage','Preparando respaldo…');
   try{
     if(!window.JSZip)throw new Error('No se pudo cargar el componente de archivos ZIP.');
     const zip=new JSZip();
-    const tables=['proveedores','factura_contadores','clientes','facturas','detalles_factura'];
+    const tables=['profiles','proveedores','factura_contadores','clientes','facturas','detalles_factura'];
     const backup={application:'JGGOLDNICSA',generated_at:new Date().toISOString(),generated_by:currentUser.email,tables:{},notes:'Incluye datos de las tablas y, cuando se descargan correctamente, las fotografías privadas de cédulas en la carpeta fotos_cedula.'};
     for(const table of tables){setMessage('backupMessage',`Respaldando ${table}…`);const {data,error}=await db.from(table).select('*');if(error)throw error;backup.tables[table]=data||[];}
     zip.file('respaldo-datos.json',JSON.stringify(backup,null,2));
@@ -398,4 +466,3 @@ window.printInvoice=async id=>{
 };
 
 init();
-
