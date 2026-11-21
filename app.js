@@ -398,3 +398,4 @@ window.printInvoice=async id=>{
 };
 
 init();
+
