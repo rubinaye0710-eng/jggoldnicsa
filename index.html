@@ -31,6 +31,29 @@
     </form>
   </section>
 
+  <section id="forcePasswordPanel" class="login-wrap hidden">
+    <form id="forcePasswordForm" class="login-card">
+      <img src="imagenes/logo.JPG" alt="RIVER GOLD JULIO RÍOS" class="login-logo">
+      <span class="eyebrow">SEGURIDAD DE LA CUENTA</span>
+      <h1>Actualiza tu contraseña</h1>
+      <p>Por seguridad, debes reemplazar la contraseña temporal antes de entrar al sistema.</p>
+      <small id="forcedAccountEmail" class="muted"></small>
+      <label for="forcePasswordNew">Nueva contraseña</label>
+      <div class="password-field">
+        <input id="forcePasswordNew" type="password" minlength="8" required autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+        <button class="password-toggle" type="button" data-password-toggle="forcePasswordNew" aria-label="Mostrar contraseña" title="Mostrar contraseña"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+      <label for="forcePasswordConfirm">Confirmar nueva contraseña</label>
+      <div class="password-field">
+        <input id="forcePasswordConfirm" type="password" minlength="8" required autocomplete="new-password" placeholder="Repite la nueva contraseña">
+        <button class="password-toggle" type="button" data-password-toggle="forcePasswordConfirm" aria-label="Mostrar contraseña" title="Mostrar contraseña"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+      <button class="btn btn-primary login-submit" id="saveForcedPassword" type="submit">Guardar nueva contraseña</button>
+      <small id="forcePasswordError" class="error" role="alert"></small>
+      <div class="login-foot">El sistema no permite continuar hasta completar este cambio.</div>
+    </form>
+  </section>
+
   <div id="app" class="app-shell hidden">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -135,7 +158,15 @@
             <div class="span-2"><button class="btn btn-primary" id="createUserBtn">＋ Crear usuario</button><span id="userMessage" class="inline-message"></span></div>
           </form>
         </article>
-        <article class="content-card"><div class="card-heading"><div><h3>Usuarios registrados</h3><p>Listado de cuentas creadas en el sistema.</p></div><button class="btn btn-outline btn-small" id="reloadUsers">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Proveedor</th><th>Último acceso</th><th>Estado</th></tr></thead><tbody id="userRows"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div><p class="muted small-note">La gestión de usuarios está restringida a administradores autorizados.</p></article>
+        <article id="createdCredentials" class="content-card hidden">
+          <div class="card-heading"><div><h3>Credenciales temporales</h3><p>Se muestran una sola vez después de crear o restablecer la cuenta. No se guardan en texto visible en la base de datos.</p></div><span class="step-number">COPIAR Y ENTREGAR</span></div>
+          <label>Correo electrónico<input id="createdCredentialEmail" readonly></label>
+          <label for="createdCredentialPassword">Contraseña temporal</label>
+          <div class="password-field"><input id="createdCredentialPassword" type="password" readonly><button class="password-toggle" type="button" data-password-toggle="createdCredentialPassword" aria-label="Mostrar contraseña temporal" title="Mostrar contraseña temporal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+          <div class="form-actions"><button type="button" class="btn btn-outline" id="copyCreatedCredentials">Copiar credenciales</button><button type="button" class="btn btn-outline" id="dismissCreatedCredentials">Ocultar y borrar de pantalla</button></div>
+          <p id="createdCredentialMessage" class="inline-message" role="status"></p>
+        </article>
+        <article class="content-card"><div class="card-heading"><div><h3>Usuarios registrados</h3><p>Listado de cuentas creadas en el sistema.</p></div><button class="btn btn-outline btn-small" id="reloadUsers">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Proveedor</th><th>Último acceso</th><th>Contraseña</th><th>Estado / acciones</th></tr></thead><tbody id="userRows"><tr><td colspan="7">Cargando…</td></tr></tbody></table></div><p class="muted small-note">La gestión de usuarios está restringida a administradores autorizados.</p></article>
       </section>
 
       <section id="trashPage" class="page-section hidden admin-only">
@@ -153,6 +184,29 @@
     </main>
   </div>
 
+  <dialog id="resetPasswordDialog" class="rg-dialog">
+    <form id="resetTempPasswordForm" class="rg-dialog-card">
+      <h2>Restablecer contraseña temporal</h2>
+      <p id="resetTargetUserLabel" class="muted"></p>
+      <input id="resetTargetUserId" type="hidden">
+      <input id="resetTargetUserEmail" type="hidden">
+      <label for="resetTemporaryPassword">Nueva contraseña temporal</label>
+      <div class="password-field"><input id="resetTemporaryPassword" type="password" minlength="8" required autocomplete="new-password" placeholder="Mínimo 8 caracteres"><button class="password-toggle" type="button" data-password-toggle="resetTemporaryPassword" aria-label="Mostrar contraseña" title="Mostrar contraseña"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <p id="resetPasswordError" class="inline-message" role="alert"></p>
+      <div class="form-actions"><button type="button" class="btn btn-outline" id="cancelResetPassword">Cancelar</button><button type="submit" class="btn btn-primary" id="saveResetPassword">Restablecer y forzar cambio</button></div>
+    </form>
+  </dialog>
+  <style>
+    .rg-dialog{border:0;border-radius:16px;padding:0;width:min(520px,calc(100% - 28px));max-width:520px;box-shadow:0 24px 80px rgba(6,20,32,.28);color:#14283b}
+    .rg-dialog::backdrop{background:rgba(6,20,32,.62)}
+    .rg-dialog-card{padding:26px;display:grid;gap:14px;background:#fffdfa}
+    .rg-dialog-card h2{margin:0;font-size:22px}
+    .rg-dialog-card p{margin:0}
+    .rg-dialog-card label{display:grid;gap:7px;font-weight:600}
+    .rg-dialog-card .form-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+    #createdCredentials input[readonly]{background:#f3f5f8}
+    #forcePasswordPanel{z-index:30;position:fixed;inset:0;overflow:auto}
+  </style>
   <div id="printArea" class="hidden"></div>
   <script src="config.js"></script>
   <script src="app.js"></script>

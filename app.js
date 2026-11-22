@@ -2,7 +2,7 @@ const { createClient } = supabase;
 const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 let currentUser = null;
-let currentProfile = { role: 'staff', full_name: '' };
+let currentProfile = { role: 'staff', full_name: '', provider_id: null, must_change_password: false };
 let invoices = [];
 let clientRowsCache = [];
 let reportRowsCache = [];
@@ -26,15 +26,26 @@ async function init(){
 }
 async function enter(user){
   currentUser=user;
+  await loadProfile();
+  if(currentProfile.must_change_password){
+    $('login').classList.add('hidden');
+    $('app').classList.add('hidden');
+    $('forcePasswordPanel').classList.remove('hidden');
+    $('forcePasswordForm').reset();
+    $('forcedAccountEmail').textContent=currentUser.email||'';
+    $('forcePasswordError').textContent='';
+    $('forcePasswordNew').focus();
+    return;
+  }
+  $('forcePasswordPanel').classList.add('hidden');
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   $('todayLabel').textContent=new Date().toLocaleDateString('es-NI',{day:'2-digit',month:'short',year:'numeric'});
-  await loadProfile();
   showPage('dashboard');
 }
 async function loadProfile(){
-  const {data,error}=await db.from('profiles').select('full_name,role,provider_id').eq('id',currentUser.id).maybeSingle();
-  if(error || !data){ currentProfile={role:'staff',provider_id:null,full_name:currentUser.email?.split('@')[0]||'Usuario'}; $('profileNotice').textContent='No se encontró el perfil de acceso. Solicita al administrador completar la configuración de roles en Supabase.'; $('profileNotice').classList.remove('hidden'); }
-  else {currentProfile=data; $('profileNotice').classList.add('hidden');}
+  const {data,error}=await db.from('profiles').select('full_name,role,provider_id,must_change_password,password_changed_at').eq('id',currentUser.id).maybeSingle();
+  if(error || !data){ currentProfile={role:'staff',provider_id:null,full_name:currentUser.email?.split('@')[0]||'Usuario',must_change_password:false}; $('profileNotice').textContent='No se encontró el perfil de acceso. Solicita al administrador completar la configuración de roles en Supabase.'; $('profileNotice').classList.remove('hidden'); }
+  else {currentProfile={...data,must_change_password:Boolean(data.must_change_password)}; $('profileNotice').classList.add('hidden');}
   const displayName=currentProfile.full_name||currentUser.email||'Usuario';
   $('userName').textContent=displayName; const assignedProvider=PROVIDERS.find(p=>p.id===Number(currentProfile.provider_id)); $('userRole').textContent=isAdmin()?'Administrador':(assignedProvider?.name||'Personal sin proveedor'); $('userAvatar').textContent=initials(displayName);
   document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',!isAdmin()));
@@ -57,12 +68,37 @@ function showPage(page){
   if(page==='users') loadUsers();
   if(page==='trash') loadTrash();
 }
-async function logout(){await db.auth.signOut();currentUser=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();}
+async function logout(){await db.auth.signOut();currentUser=null;$('app').classList.add('hidden');$('forcePasswordPanel').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();$('forcePasswordForm').reset();}
 $('loginForm').addEventListener('submit',async e=>{
   e.preventDefault();$('loginError').textContent='Validando acceso…';
   const {data,error}=await db.auth.signInWithPassword({email:$('email').value,password:$('password').value});
   if(error){$('loginError').textContent='No fue posible iniciar sesión. Verifica el correo y la contraseña.';return;}
   $('loginError').textContent=''; await enter(data.user);
+});
+$('forcePasswordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const button = $('saveForcedPassword');
+  const password = $('forcePasswordNew').value;
+  const confirmation = $('forcePasswordConfirm').value;
+  $('forcePasswordError').textContent = '';
+  if (password.length < 8) { $('forcePasswordError').textContent = 'La nueva contraseña debe tener al menos 8 caracteres.'; return; }
+  if (password !== confirmation) { $('forcePasswordError').textContent = 'Las contraseñas no coinciden.'; return; }
+  button.disabled = true;
+  button.textContent = 'Actualizando contraseña…';
+  try {
+    const { error: updateError } = await db.auth.updateUser({ password });
+    if (updateError) throw updateError;
+    const { error: confirmError } = await db.rpc('confirm_my_password_change');
+    if (confirmError) throw new Error('La contraseña se actualizó, pero no se pudo confirmar el cambio en el perfil. Intenta guardar nuevamente: ' + confirmError.message);
+    form.reset();
+    await enter(currentUser);
+  } catch (err) {
+    $('forcePasswordError').textContent = err?.message || 'No se pudo actualizar la contraseña.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Guardar nueva contraseña';
+  }
 });
 $('logout').onclick=logout;
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
@@ -241,47 +277,126 @@ function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const a=doc
 
 async function invokeAdmin(action,body){
   const options={method:action==='list'?'GET':action==='create'?'POST':'PATCH'};
-  if(body)options.body=body;
+  if(body)options.body=action==='reset_password'?{...body,action:'reset_password'}:body;
   const {data,error}=await db.functions.invoke('admin-users',options);
   if(error)throw error; if(data?.error)throw new Error(data.error); return data;
 }
 async function loadUsers(){
-  $('userRows').innerHTML='<tr><td colspan="6">Cargando…</td></tr>';
+  $('userRows').innerHTML='<tr><td colspan="7">Cargando…</td></tr>';
   try{
     const result=await invokeAdmin('list');
     $('userRows').innerHTML=(result.users||[]).map(u=>{
       const providerOptions=PROVIDERS.map(p=>`<option value="${p.id}" ${Number(u.provider_id)===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
       const roleOptions=`<option value="staff" ${u.role==='staff'?'selected':''}>Personal</option><option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>`;
-      return `<tr><td>${esc(u.full_name||'—')}</td><td>${esc(u.email)}</td><td><select class="role-select" data-user-id="${esc(u.id)}" data-field="role">${roleOptions}</select></td><td><select class="role-select provider-user-select" data-user-id="${esc(u.id)}" data-field="provider_id" ${u.role==='admin'?'disabled':''}><option value="">Sin asignar</option>${providerOptions}</select></td><td>${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-NI'):'Sin acceso'}</td><td><span class="status-pill ${u.banned_until?'inactive':''}">${u.banned_until?'Suspendido':'Activo'}</span></td></tr>`;
-    }).join('')||'<tr><td colspan="6">No hay usuarios registrados.</td></tr>';
+      const passwordState=u.must_change_password
+        ?'<span class="status-pill inactive">Debe cambiar contraseña</span>'
+        :'<span class="status-pill">Contraseña actualizada</span>';
+      return `<tr>
+        <td>${esc(u.full_name||'—')}</td>
+        <td>${esc(u.email)}</td>
+        <td><select class="role-select" data-user-id="${esc(u.id)}" data-field="role">${roleOptions}</select></td>
+        <td><select class="role-select provider-user-select" data-user-id="${esc(u.id)}" data-field="provider_id" ${u.role==='admin'?'disabled':''}><option value="">Sin asignar</option>${providerOptions}</select></td>
+        <td>${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-NI'):'Sin acceso'}</td>
+        <td>${passwordState}</td>
+        <td><span class="status-pill ${u.banned_until?'inactive':''}">${u.banned_until?'Suspendido':'Activo'}</span><button type="button" class="btn btn-outline btn-small" data-reset-user="${esc(u.id)}" data-reset-name="${esc(u.full_name||u.email)}" data-reset-email="${esc(u.email)}">Restablecer clave</button></td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="7">No hay usuarios registrados.</td></tr>';
     $('userRows').querySelectorAll('tr').forEach(row=>{
       const roleSelect=row.querySelector('select[data-field="role"]');
       const providerSelect=row.querySelector('select[data-field="provider_id"]');
-      if(!roleSelect||!providerSelect)return;
-      const syncProviderControl=()=>{providerSelect.disabled=roleSelect.value==='admin';};
-      const saveAssignment=async()=>{
-        const role=roleSelect.value;
-        const provider_id=role==='admin'?null:Number(providerSelect.value||0);
-        if(role==='staff'&&!provider_id){alert('Selecciona el proveedor asignado.');return;}
-        if(!confirm('¿Guardar el rol y proveedor asignado de esta cuenta?')){await loadUsers();return;}
-        try{await invokeAdmin('update',{user_id:roleSelect.dataset.userId,role,provider_id});alert('Usuario actualizado.');await loadUsers();}
-        catch(e){alert(e.message);await loadUsers();}
-      };
-      roleSelect.addEventListener('change',()=>{syncProviderControl();if(roleSelect.value==='admin'||providerSelect.value)saveAssignment();});
-      providerSelect.addEventListener('change',saveAssignment);
-      syncProviderControl();
+      if(roleSelect&&providerSelect){
+        const syncProviderControl=()=>{providerSelect.disabled=roleSelect.value==='admin';};
+        const saveAssignment=async()=>{
+          const role=roleSelect.value;
+          const provider_id=role==='admin'?null:Number(providerSelect.value||0);
+          if(role==='staff'&&!provider_id){alert('Selecciona el proveedor asignado.');return;}
+          if(!confirm('¿Guardar el rol y proveedor asignado de esta cuenta?')){await loadUsers();return;}
+          try{await invokeAdmin('update',{user_id:roleSelect.dataset.userId,role,provider_id});alert('Usuario actualizado.');await loadUsers();}
+          catch(e){alert(e.message);await loadUsers();}
+        };
+        roleSelect.addEventListener('change',()=>{syncProviderControl();if(roleSelect.value==='admin'||providerSelect.value)saveAssignment();});
+        providerSelect.addEventListener('change',saveAssignment);
+        syncProviderControl();
+      }
+      row.querySelector('[data-reset-user]')?.addEventListener('click',()=>{
+        const button=row.querySelector('[data-reset-user]');
+        $('resetTempPasswordForm').reset();
+        $('resetTargetUserId').value=button.dataset.resetUser;
+        $('resetTargetUserEmail').value=button.dataset.resetEmail;
+        $('resetTargetUserLabel').textContent=`${button.dataset.resetName} · ${button.dataset.resetEmail}`;
+        $('resetPasswordError').textContent='';
+        $('resetPasswordDialog').showModal();
+      });
     });
-  }catch(err){$('userRows').innerHTML=`<tr><td colspan="6">${esc(err.message)}<br><small>Verifica que la función admin-users esté desplegada y que tu cuenta tenga rol administrador.</small></td></tr>`;}
+  }catch(err){$('userRows').innerHTML=`<tr><td colspan="7">${esc(err.message)}<br><small>Verifica que la función admin-users esté desplegada y que tu cuenta tenga rol administrador.</small></td></tr>`;}
 }
 $('reloadUsers').onclick=loadUsers;
 $('newUserRole').addEventListener('change',()=>{const admin=$('newUserRole').value==='admin';$('newUserProviderWrap').classList.toggle('hidden',admin);$('newUserProvider').required=!admin;});
 $('newUserRole').dispatchEvent(new Event('change'));
-$('userForm').addEventListener('submit',async e=>{
-  e.preventDefault();const b=$('createUserBtn');b.disabled=true;setMessage('userMessage','Creando usuario…');
-  try{const fd=new FormData(e.currentTarget);const role=fd.get('role');await invokeAdmin('create',{email:fd.get('email'),password:fd.get('password'),full_name:fd.get('full_name'),role,provider_id:role==='admin'?null:Number(fd.get('provider_id'))});e.currentTarget.reset();$('newUserRole').dispatchEvent(new Event('change'));setMessage('userMessage','Usuario creado correctamente con su proveedor asignado.');await loadUsers();}
-  catch(err){setMessage('userMessage',err.message,true);}
-  finally{b.disabled=false;}
+$('userForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const button = $('createUserBtn');
+  button.disabled = true;
+  setMessage('userMessage', 'Creando usuario…');
+  try {
+    const formData = new FormData(form);
+    const role = formData.get('role');
+    const email = String(formData.get('email')||'').trim().toLowerCase();
+    const temporaryPassword = String(formData.get('password')||'');
+    const request = {
+      email,
+      password: temporaryPassword,
+      full_name: formData.get('full_name'),
+      role,
+      provider_id: role === 'admin' ? null : Number(formData.get('provider_id')),
+    };
+    await invokeAdmin('create', request);
+    form.reset();
+    $('newUserRole').dispatchEvent(new Event('change'));
+    $('createdCredentialEmail').textContent=email;
+    $('createdCredentialPassword').value=temporaryPassword;
+    $('createdCredentials').classList.remove('hidden');
+    setMessage('userMessage', 'Usuario creado. Comparte esta contraseña temporal por un canal seguro; deberá cambiarla al entrar por primera vez.');
+    await loadUsers();
+  } catch (err) {
+    setMessage('userMessage', err?.message || 'No fue posible crear el usuario.', true);
+  } finally {
+    button.disabled = false;
+  }
 });
+$('copyCreatedCredentials').onclick=async()=>{
+  const value=`Usuario: ${$('createdCredentialEmail').textContent}\nContraseña temporal: ${$('createdCredentialPassword').value}`;
+  try{await navigator.clipboard.writeText(value);setMessage('createdCredentialMessage','Credenciales copiadas. Envíalas por un canal seguro.');}
+  catch(_e){setMessage('createdCredentialMessage','No se pudo copiar automáticamente. Puedes seleccionar los datos manualmente.',true);}
+};
+$('dismissCreatedCredentials').onclick=()=>{
+  $('createdCredentialPassword').value='';
+  $('createdCredentialEmail').textContent='';
+  $('createdCredentials').classList.add('hidden');
+  setMessage('createdCredentialMessage','');
+};
+$('resetTempPasswordForm').addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  const form=e.currentTarget;
+  const button=$('saveResetPassword');
+  const userId=$('resetTargetUserId').value;
+  const temporaryPassword=$('resetTemporaryPassword').value;
+  if(temporaryPassword.length<8){$('resetPasswordError').textContent='La contraseña debe tener al menos 8 caracteres.';return;}
+  button.disabled=true;$('resetPasswordError').textContent='Actualizando contraseña…';
+  try{
+    await invokeAdmin('reset_password',{user_id:userId,temporary_password:temporaryPassword});
+    $('resetPasswordDialog').close();
+    $('createdCredentialEmail').textContent=$('resetTargetUserEmail').value;
+    $('createdCredentialPassword').value=temporaryPassword;
+    $('createdCredentials').classList.remove('hidden');
+    setMessage('createdCredentialMessage','Contraseña temporal restablecida. El usuario deberá cambiarla al iniciar sesión.');
+    await loadUsers();
+  }catch(err){$('resetPasswordError').textContent=err?.message||'No se pudo restablecer la contraseña.';}
+  finally{button.disabled=false;}
+});
+$('cancelResetPassword').onclick=()=>$('resetPasswordDialog').close();
+
 
 async function loadTrash(){
   $('trashRows').innerHTML='<tr><td colspan="6">Cargando papelera…</td></tr>';
