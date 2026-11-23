@@ -128,7 +128,7 @@
 
       <section id="clientsPage" class="page-section hidden">
         <div class="section-intro"><div><span class="eyebrow">DIRECTORIO</span><h1>Clientes</h1><p>Personas registradas en las operaciones de compra.</p></div></div>
-        <article class="content-card"><div class="filters"><input id="clientFilter" placeholder="Buscar por nombre, cédula o teléfono…"><button id="reloadClients" class="btn btn-outline">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Dirección</th><th>Registro</th></tr></thead><tbody id="clientRows"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></article>
+        <article class="content-card"><div class="filters"><input id="clientFilter" placeholder="Buscar por nombre, cédula o teléfono…"><button id="reloadClients" class="btn btn-outline">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Dirección</th><th>Registro</th><th>Acciones</th></tr></thead><tbody id="clientRows"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div></article>
       </section>
 
       <section id="reportsPage" class="page-section hidden">
@@ -184,6 +184,25 @@
     </main>
   </div>
 
+  <dialog id="clientInvoicesDialog" class="rg-dialog rg-client-invoices-dialog">
+    <div class="rg-dialog-card">
+      <div class="rg-dialog-heading">
+        <div>
+          <h2 id="clientInvoicesTitle">Facturas del cliente</h2>
+          <p id="clientInvoicesSubtitle" class="muted">Comprobantes registrados para este cliente.</p>
+        </div>
+        <button type="button" class="btn btn-outline btn-small" id="closeClientInvoices">Cerrar</button>
+      </div>
+      <div class="table-wrap">
+        <table class="rg-modal-table">
+          <thead><tr><th>N.º factura</th><th>Proveedor</th><th>Fecha</th><th>Importe</th><th>Acción</th></tr></thead>
+          <tbody id="clientInvoiceRows"><tr><td colspan="5">Cargando facturas…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="muted small-note">La vista completa del recibo respeta los permisos del proveedor y de la administradora.</p>
+    </div>
+  </dialog>
+
   <dialog id="resetPasswordDialog" class="rg-dialog">
     <form id="resetTempPasswordForm" class="rg-dialog-card">
       <h2>Restablecer contraseña temporal</h2>
@@ -204,6 +223,16 @@
     .rg-dialog-card p{margin:0}
     .rg-dialog-card label{display:grid;gap:7px;font-weight:600}
     .rg-dialog-card .form-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+    .rg-client-invoices-dialog{width:min(920px,calc(100% - 28px));max-width:920px}
+    .rg-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+    .rg-modal-table{width:100%;border-collapse:collapse;min-width:620px}
+    .rg-modal-table th,.rg-modal-table td{padding:11px 10px;border-bottom:1px solid #e8e1d6;text-align:left;font-size:13px}
+    .rg-modal-table th{background:#f4efe5;color:#536273;font-weight:700}
+    .rg-modal-table td:last-child{text-align:right}
+    .client-actions{display:flex;gap:8px;align-items:center}
+    .client-view-button{white-space:nowrap}
+    .rg-screen-only{display:inline-flex}
+    @media(max-width:640px){.rg-dialog-heading{flex-direction:column}.rg-dialog-heading button{align-self:flex-end}}
     #createdCredentials input[readonly]{background:#f3f5f8}
     #forcePasswordPanel{z-index:30;position:fixed;inset:0;overflow:auto}
   </style>

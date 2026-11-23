@@ -2,6 +2,8 @@ const { createClient } = supabase;
 const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 let currentUser = null;
+let currentPage = 'dashboard';
+let invoicePreviewReturnPage = 'clients';
 let currentProfile = { role: 'staff', full_name: '', provider_id: null, must_change_password: false };
 let invoices = [];
 let clientRowsCache = [];
@@ -52,6 +54,7 @@ async function loadProfile(){
   document.querySelector('.admin-label').classList.toggle('hidden',!isAdmin());
 }
 function showPage(page){
+  currentPage = page;
   if(['users','backup','trash'].includes(page) && !isAdmin()){alert('Esta sección está disponible únicamente para administradores.');page='dashboard';}
   document.querySelectorAll('.page-section').forEach(s=>s.classList.add('hidden'));
   const map={dashboard:'dashboardPage',invoices:'invoicePage',new:'newPage',clients:'clientsPage',reports:'reportsPage',users:'usersPage',trash:'trashPage',backup:'backupPage'};
@@ -250,13 +253,45 @@ $('invoiceForm').addEventListener('submit',async e=>{
 });
 
 async function loadClients(){
-  $('clientRows').innerHTML='<tr><td colspan="5">Cargando…</td></tr>';
+  $('clientRows').innerHTML='<tr><td colspan="6">Cargando…</td></tr>';
   const {data,error}=await db.from('clientes').select('cliente_id,nombre,cedula,telefono,direccion,created_at').order('cliente_id',{ascending:false});
-  if(error){$('clientRows').innerHTML=`<tr><td colspan="5">${esc(error.message)}</td></tr>`;return;}
+  if(error){$('clientRows').innerHTML=`<tr><td colspan="6">${esc(error.message)}</td></tr>`;return;}
   clientRowsCache=data||[];renderClients();
 }
-function renderClients(){const term=$('clientFilter').value.toLowerCase();const rows=clientRowsCache.filter(c=>[c.nombre,c.cedula,c.telefono,c.direccion].join(' ').toLowerCase().includes(term));$('clientRows').innerHTML=rows.map(c=>`<tr><td>${esc(c.nombre)}</td><td>${esc(c.cedula)}</td><td>${esc(c.telefono)}</td><td>${esc(c.direccion)}</td><td>${c.created_at?new Date(c.created_at).toLocaleDateString('es-NI'):'—'}</td></tr>`).join('')||'<tr><td colspan="5">No hay clientes para mostrar.</td></tr>';}
+function renderClients(){
+  const term=$('clientFilter').value.toLowerCase();
+  const rows=clientRowsCache.filter(c=>[c.nombre,c.cedula,c.telefono,c.direccion].join(' ').toLowerCase().includes(term));
+  $('clientRows').innerHTML=rows.map(c=>`<tr>
+    <td>${esc(c.nombre)}</td><td>${esc(c.cedula)}</td><td>${esc(c.telefono)}</td><td>${esc(c.direccion)}</td>
+    <td>${c.created_at?new Date(c.created_at).toLocaleDateString('es-NI'):'—'}</td>
+    <td><div class="client-actions"><button type="button" class="btn btn-outline btn-small client-view-button" onclick="viewClientInvoices(${Number(c.cliente_id)})">Ver factura</button></div></td>
+  </tr>`).join('')||'<tr><td colspan="6">No hay clientes para mostrar.</td></tr>';
+}
 $('clientFilter').oninput=renderClients; $('reloadClients').onclick=loadClients;
+
+window.viewClientInvoices = async (clientId) => {
+  const client=clientRowsCache.find(c=>Number(c.cliente_id)===Number(clientId));
+  if(!client){alert('No se encontró el cliente seleccionado. Actualiza el directorio e inténtalo nuevamente.');return;}
+  $('clientInvoicesTitle').textContent=`Facturas de ${client.nombre}`;
+  $('clientInvoicesSubtitle').textContent=`Cédula: ${client.cedula||'—'} · Teléfono: ${client.telefono||'—'}`;
+  $('clientInvoiceRows').innerHTML='<tr><td colspan="5">Buscando facturas…</td></tr>';
+  const dialog=$('clientInvoicesDialog');
+  if(!dialog.open) dialog.showModal();
+  const {data,error}=await db.from('facturas')
+    .select('factura_id,numero_factura,fecha,proveedor_id,deleted_at,proveedores(nombre),detalles_factura(precio_total)')
+    .eq('cliente_id',Number(clientId)).is('deleted_at',null).order('factura_id',{ascending:false});
+  if(error){$('clientInvoiceRows').innerHTML=`<tr><td colspan="5">${esc(error.message)}</td></tr>`;return;}
+  const rows=data||[];
+  if(!rows.length){$('clientInvoiceRows').innerHTML='<tr><td colspan="5">Este cliente todavía no tiene facturas activas registradas.</td></tr>';return;}
+  $('clientInvoiceRows').innerHTML=rows.map(f=>{
+    const total=(f.detalles_factura||[]).reduce((sum,d)=>sum+Number(d.precio_total||0),0);
+    const canView=isAdmin()||Number(f.proveedor_id)===Number(currentProfile.provider_id);
+    const action=canView?`<button type="button" class="btn btn-primary btn-small" onclick="viewInvoice(${Number(f.factura_id)})">Ver factura</button>`:'<span class="muted">Solo consulta</span>';
+    return `<tr><td>${esc(f.numero_factura)}</td><td>${esc(f.proveedores?.nombre||'—')}</td><td>${localDate(f.fecha)}</td><td>${money(total)}</td><td>${action}</td></tr>`;
+  }).join('');
+};
+$('closeClientInvoices').onclick=()=> $('clientInvoicesDialog').close();
+$('clientInvoicesDialog').addEventListener('click',e=>{if(e.target===$('clientInvoicesDialog'))$('clientInvoicesDialog').close();});
 
 async function loadReports(){
   $('providerReportRows').innerHTML='<tr><td colspan="4">Cargando…</td></tr>';
@@ -439,7 +474,7 @@ $('createBackup').onclick=async()=>{
   finally{btn.disabled=false;}
 };
 
-window.printInvoice=async id=>{
+async function renderInvoiceDocument(id, autoPrint=true){
   const {data:f,error}=await db.from('facturas')
     .select('*,clientes(*),proveedores(nombre),detalles_factura(*)')
     .eq('factura_id',id).single();
@@ -568,16 +603,33 @@ window.printInvoice=async id=>{
       <div class="rg-signatures"><div>RECIBÍ CONFORME</div><div>ENTREGUÉ CONFORME</div></div>
       <div class="rg-print-thanks">¡Gracias por su confianza!</div>
       <footer class="rg-print-footer">Desarrollado por Nayely Rubí Miranda · © 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A. · Todos los derechos reservados.</footer>
-      <button class="rg-print-button" onclick="window.print()">Imprimir recibo</button>
+      <div class="rg-screen-only" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:18px">
+        <button class="rg-print-button" onclick="window.print()">Imprimir recibo</button>
+        <button class="rg-print-button" style="background:#e9edf1;color:#14283b" onclick="window.closeInvoicePreview()">Volver al sistema</button>
+      </div>
     </article>`;
 
+  invoicePreviewReturnPage=currentPage;
   $('printArea').classList.remove('hidden');
   $('app').classList.add('hidden');
-  // Esperar a que las imágenes estén listas antes de abrir el diálogo de impresión.
+  // Esperar a que las imágenes estén listas antes de mostrar o imprimir el recibo.
   const images=[...$('printArea').querySelectorAll('img')];
   await Promise.all(images.map(img=>img.decode?img.decode().catch(()=>{}):new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;})));
-  window.print();
-  window.onafterprint=()=>{$('printArea').classList.add('hidden');$('app').classList.remove('hidden');};
+  if(autoPrint){
+    window.print();
+    window.onafterprint=()=>window.closeInvoicePreview();
+  }
+}
+window.printInvoice=async id=>renderInvoiceDocument(id,true);
+window.viewInvoice=async id=>{
+  $('clientInvoicesDialog')?.close();
+  return renderInvoiceDocument(id,false);
+};
+window.closeInvoicePreview=()=>{
+  $('printArea').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  const target=invoicePreviewReturnPage||'clients';
+  showPage(target);
 };
 
 init();
