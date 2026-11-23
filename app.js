@@ -286,10 +286,29 @@ $('invoiceForm').addEventListener('submit',async e=>{
     });
     if(!details.length)throw Error('Agrega al menos un detalle.');
     const payload={cliente:{nombre:fd.get('clienteNombre'),telefono:fd.get('telefono'),cedula:fd.get('cedula'),direccion:fd.get('clienteDireccion'),foto_cedula:uploadedPath},proveedor_id:assignedProvider,ruc:fd.get('ruc'),uag:fd.get('uag'),detalles:details};
-    const {error}=await db.rpc('crear_factura',{p_payload:payload}); if(error)throw error;
-    alert('Factura guardada correctamente.');showPage('invoices');
-  }catch(err){if(uploadedPath)await db.storage.from('documentos-clientes').remove([uploadedPath]);setMessage('formMessage',err.message||'No fue posible guardar la factura.',true);}
-  finally{b.disabled=false;}
+    const {data: facturaId, error}=await db.rpc('crear_factura',{p_payload:payload});
+    if(error) throw error;
+
+    // La factura ya quedó guardada: desde aquí no se debe borrar su foto
+    // aunque falle la apertura del recibo para impresión.
+    uploadedPath = null;
+
+    if(!facturaId){
+      resetInvoiceForm();
+      showPage('invoices');
+      alert('La factura se guardó, pero Supabase no devolvió su identificador. Búscala en el listado para abrir e imprimir el recibo.');
+      return;
+    }
+
+    // Limpiar el formulario y regresar al listado; luego abrir automáticamente
+    // el recibo recién creado y mostrar el diálogo de impresión.
+    resetInvoiceForm();
+    showPage('invoices');
+    await renderInvoiceDocument(Number(facturaId), true);
+  }catch(err){
+    if(uploadedPath) await db.storage.from('documentos-clientes').remove([uploadedPath]);
+    setMessage('formMessage',err.message||'No fue posible guardar la factura.',true);
+  }finally{b.disabled=false;}
 });
 
 async function loadClients(){
@@ -595,7 +614,7 @@ async function renderInvoiceDocument(id, autoPrint=true){
           <h1>RIVER GOLD</h1>
           <p class="company">INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A.</p>
           <p><b>RUC:</b> ${esc(f.ruc)} &nbsp; <b>UAF:</b> ${esc(f.uag)}</p>
-          <p><b>Teléfonos:</b> Tigo: 83785672 · Claro: 82265246 / 77473771</p>
+          <p><b>Cel:</b> 8378-5672</p>
           <p><b>Dirección:</b> Colonia Máximo Jerez, de Yantaza 3 andenes al norte.</p>
         </div>
         <div class="rg-print-title">
@@ -639,10 +658,9 @@ async function renderInvoiceDocument(id, autoPrint=true){
       </table>
 
       <div class="rg-print-grand"><span>IMPORTE TOTAL DEL RECIBO</span><strong>${money(total)}</strong></div>
-      <div class="rg-print-legal"><b>DECLARACIÓN DE PERTENENCIA:</b> La persona cuyos datos se encuentran en este comprobante declara ser la legítima propietaria del material descrito y asume la responsabilidad correspondiente sobre su procedencia.</div>
       <div class="rg-signatures"><div>RECIBÍ CONFORME</div><div>ENTREGUÉ CONFORME</div></div>
       <div class="rg-print-thanks">¡Gracias por su confianza!</div>
-      <footer class="rg-print-footer">Desarrollado por Nayely Rubí Miranda · © 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A. · Todos los derechos reservados.</footer>
+      <footer class="rg-print-footer">© 2026 INVESTMENTS RIOS BRACKEIT GOLD NICARAGUA S.A. · Todos los derechos reservados.</footer>
       <div class="rg-screen-only" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:18px">
         <button class="rg-print-button" onclick="window.print()">Imprimir recibo</button>
         <button class="rg-print-button" style="background:#e9edf1;color:#14283b" onclick="window.closeInvoicePreview()">Volver al sistema</button>
