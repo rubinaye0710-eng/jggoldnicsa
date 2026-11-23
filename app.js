@@ -216,14 +216,35 @@ async function loadNextNumber(){
   $('invoiceNumber').value=error?'No disponible':String((data?.contador_actual??0)+1);
 }
 $('provider').onchange=()=>{if(isAdmin())loadNextNumber();};
+function localDateISO(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function addItem(){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input data-k="descripcion" required></td><td><input data-k="cantidad" type="number" min="1" step="1" required value="1"></td><td><input data-k="fecha_entrega" type="date" required></td><td><input data-k="cierre" required></td><td><input data-k="gramos" type="number" min="0" step=".01" required value="0"></td><td><input data-k="precio_por_gramo" type="number" min="0" step=".01" required value="0"></td><td><input data-k="kilataje"></td><td><input data-k="onzas" type="number" min="0" step=".01" value="0" required></td><td><input data-k="punto"></td><td><input data-k="precio_total" readonly value="0.00"></td><td><button type="button" class="danger">×</button></td>`;
-  tr.querySelector('button').onclick=()=>{tr.remove();updateTotal();};
-  tr.querySelectorAll('input').forEach(i=>i.addEventListener('input',updateTotal)); $('itemRows').appendChild(tr);
+  // La captura de datos replica las cinco columnas del recibo físico.
+  // Los campos heredados de la base se completan de forma interna al guardar.
+  tr.innerHTML=`
+    <td><input data-k="kilataje" placeholder="18K" aria-label="Kilataje" required></td>
+    <td><input data-k="descripcion" placeholder="Descripción del material" aria-label="Descripción" required></td>
+    <td><input data-k="precio_por_gramo" type="number" min="0" step=".01" value="0" aria-label="Precio por gramo" required></td>
+    <td><input data-k="gramos" type="number" min="0.01" step=".01" value="0" aria-label="Peso neto en gramos" required></td>
+    <td><div class="item-amount-cell"><input data-k="precio_total" readonly value="0.00" aria-label="Importe"><button type="button" class="danger remove-item" aria-label="Eliminar renglón" title="Eliminar renglón">×</button></div></td>`;
+  tr.querySelector('.remove-item').onclick=()=>{tr.remove();updateTotal();};
+  tr.querySelectorAll('input:not([readonly])').forEach(i=>i.addEventListener('input',updateTotal));
+  $('itemRows').appendChild(tr);
 }
 $('addItem').onclick=addItem;
-function updateTotal(){let total=0;document.querySelectorAll('#itemRows tr').forEach(tr=>{const val=k=>Number(tr.querySelector(`[data-k="${k}"]`).value)||0;const sub=val('gramos')*val('precio_por_gramo');tr.querySelector('[data-k="precio_total"]').value=sub.toFixed(2);total+=sub;});$('grandTotal').textContent=money(total);}
+function updateTotal(){
+  let total=0;
+  document.querySelectorAll('#itemRows tr').forEach(tr=>{
+    const val=k=>Number(tr.querySelector(`[data-k="${k}"]`)?.value)||0;
+    const amount=val('gramos')*val('precio_por_gramo');
+    tr.querySelector('[data-k="precio_total"]').value=amount.toFixed(2);
+    total+=amount;
+  });
+  $('grandTotal').textContent=money(total);
+}
 $('searchClient').onclick=async()=>{
   const ced=$('clientSearch').value.trim();if(!ced)return;
   const {data,error}=await db.from('clientes').select('nombre,telefono,cedula,direccion').ilike('cedula',`%${ced}%`).limit(10);
@@ -243,7 +264,26 @@ $('invoiceForm').addEventListener('submit',async e=>{
     // El proveedor en la ruta permite que Storage aplique permisos por cuenta.
     uploadedPath=`cedulas/provider-${assignedProvider}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
     const up=await db.storage.from('documentos-clientes').upload(uploadedPath,file,{upsert:false,contentType:file.type}); if(up.error)throw up.error;
-    const details=[...$('itemRows').querySelectorAll('tr')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value);return o;});
+    const details=[...$('itemRows').querySelectorAll('tr')].map(tr=>{
+      const value=k=>tr.querySelector(`[data-k=\"${k}\"]`)?.value?.trim() ?? '';
+      const pesoNeto=Number(value('gramos'));
+      const precioGramo=Number(value('precio_por_gramo'));
+      if(!value('kilataje') || !value('descripcion')) throw Error('Completa el kilataje y la descripción de cada renglón.');
+      if(!(pesoNeto>0) || precioGramo<0) throw Error('El peso neto debe ser mayor que cero y el precio por gramo no puede ser negativo.');
+      return {
+        kilataje:value('kilataje'),
+        descripcion:value('descripcion'),
+        precio_por_gramo:precioGramo.toFixed(2),
+        gramos:pesoNeto.toFixed(2),
+        precio_total:(pesoNeto*precioGramo).toFixed(2),
+        // Compatibilidad con el esquema histórico: ya no se solicitan en pantalla.
+        cantidad:1,
+        fecha_entrega:localDateISO(),
+        cierre:'',
+        onzas:'',
+        punto:''
+      };
+    });
     if(!details.length)throw Error('Agrega al menos un detalle.');
     const payload={cliente:{nombre:fd.get('clienteNombre'),telefono:fd.get('telefono'),cedula:fd.get('cedula'),direccion:fd.get('clienteDireccion'),foto_cedula:uploadedPath},proveedor_id:assignedProvider,ruc:fd.get('ruc'),uag:fd.get('uag'),detalles:details};
     const {error}=await db.rpc('crear_factura',{p_payload:payload}); if(error)throw error;
